@@ -22,7 +22,7 @@ export const Lobby: React.FC<LobbyProps> = ({ user, onGameSelected }) => {
   const loadGames = async () => {
     try {
       const response = await gameService.listGames();
-      setGames(response.data);
+      setGames(response.data.games || []);
     } catch (err) {
       console.error('Failed to load games:', err);
     }
@@ -31,9 +31,10 @@ export const Lobby: React.FC<LobbyProps> = ({ user, onGameSelected }) => {
   const handleCreateGame = async () => {
     setLoading(true);
     try {
-      const response = await gameService.createGame();
-      onGameSelected(response.data._id);
+      const response = await gameService.createGame(user.username, user._id);
+      onGameSelected(response.data.table?.id || response.data._id);
     } catch (err: any) {
+      console.error('Create game error:', err);
       setError('Failed to create game');
     } finally {
       setLoading(false);
@@ -48,9 +49,10 @@ export const Lobby: React.FC<LobbyProps> = ({ user, onGameSelected }) => {
 
     setLoading(true);
     try {
-      const response = await gameService.joinGame(inviteCode);
-      onGameSelected(response.data._id);
+      const response = await gameService.joinGame(inviteCode, user.username, user._id);
+      onGameSelected(response.data.table?.id || response.data._id);
     } catch (err: any) {
+      console.error('Join game error:', err);
       setError('Failed to join game');
     } finally {
       setLoading(false);

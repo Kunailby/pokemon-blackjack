@@ -12,9 +12,10 @@ function App() {
   const [tableId, setTableId] = React.useState<string>('');
 
   React.useEffect(() => {
-    // Generate random username on load
+    // Generate random username and ID on load
     const randomName = 'Player' + Math.floor(Math.random() * 10000);
-    setUser({ username: randomName });
+    const randomId = 'user_' + Math.random().toString(36).substring(2, 15);
+    setUser({ username: randomName, _id: randomId });
   }, []);
 
   const handleGameSelected = (id: string) => {

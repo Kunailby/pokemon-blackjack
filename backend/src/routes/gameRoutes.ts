@@ -6,14 +6,14 @@ import {
   listAvailableGames,
   startGame
 } from '../controllers/gameController';
-import { authMiddleware } from '../middleware/auth';
 
 const router = express.Router();
 
-router.post('/create', authMiddleware, createGameTable);
-router.post('/join', authMiddleware, joinGameTable);
-router.get('/available', authMiddleware, listAvailableGames);
-router.get('/:tableId', authMiddleware, getGameTable);
-router.post('/:tableId/start', authMiddleware, startGame);
+// No auth required - username passed in body
+router.post('/create', createGameTable);
+router.post('/join', joinGameTable);
+router.get('/available', listAvailableGames);
+router.get('/:tableId', getGameTable);
+router.post('/:tableId/start', startGame);
 
 export default router;
