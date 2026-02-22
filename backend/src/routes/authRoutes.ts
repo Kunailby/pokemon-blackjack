@@ -4,7 +4,8 @@ import { authMiddleware } from '../middleware/auth';
 
 const router = express.Router();
 
-router.post('/register', register);
+
+// Only username login
 router.post('/login', login);
 router.get('/profile', authMiddleware, getProfile);
 

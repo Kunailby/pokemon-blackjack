@@ -50,36 +50,26 @@ export const register = async (req: AuthRequest, res: Response) => {
 
 export const login = async (req: AuthRequest, res: Response) => {
   try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
+    const { username } = req.body;
+    if (!username) {
+      return res.status(400).json({ error: 'Username required' });
     }
-
-    // Find user
-    const user = await User.findOne({ email });
+    let user = await User.findOne({ username });
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      // Auto-create user if not exists
+      user = new User({ username, chips: 1000 });
+      await user.save();
     }
-
-    // Check password
-    const isPasswordValid = await bcryptjs.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Generate token
     const token = generateToken(user._id.toString(), user.username);
-
     res.json({
       token,
       user: {
         id: user._id,
         username: user.username,
-        email: user.email,
         chips: user.chips,
         totalGamesPlayed: user.totalGamesPlayed,
-        totalWins: user.totalWins
+        totalWins: user.totalWins,
+        totalLosses: user.totalLosses
       }
     });
   } catch (error) {

@@ -1,24 +1,15 @@
+
 import axios from 'axios';
-
 const API_BASE_URL = 'http://localhost:5000/api';
-
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-});
-
+const apiClient = axios.create({ baseURL: API_BASE_URL });
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
 export const authService = {
-  register: (email: string, username: string, password: string) =>
-    apiClient.post('/auth/register', { email, username, password }),
-  login: (email: string, password: string) =>
-    apiClient.post('/auth/login', { email, password }),
+  login: (username: string) => apiClient.post('/auth/login', { username }),
   getProfile: () => apiClient.get('/auth/profile'),
 };
 

@@ -7,10 +7,7 @@ interface AuthProps {
 }
 
 export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
-  const [isLogin, setIsLogin] = React.useState(true);
-  const [email, setEmail] = React.useState('');
   const [username, setUsername] = React.useState('');
-  const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
 
@@ -18,16 +15,12 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      const response = isLogin
-        ? await authService.login(email, password)
-        : await authService.register(email, username, password);
-
+      const response = await authService.login(username);
       localStorage.setItem('token', response.data.token);
       onAuthSuccess(response.data.user);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Authentication failed');
+      setError(err.response?.data?.error || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -39,43 +32,17 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         <h1>Pokémon Blackjack</h1>
         <form onSubmit={handleSubmit}>
           <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          {!isLogin && (
-            <input
-              type="text"
-              placeholder="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-          )}
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            type="text"
+            placeholder="Enter your username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
           />
           <button type="submit" disabled={loading}>
-            {loading ? 'Loading...' : isLogin ? 'Login' : 'Register'}
+            {loading ? 'Loading...' : 'Login'}
           </button>
         </form>
         {error && <p className="error">{error}</p>}
-        <p>
-          {isLogin ? "Don't have an account? " : 'Already have an account? '}
-          <button
-            type="button"
-            onClick={() => setIsLogin(!isLogin)}
-            className="toggle-btn"
-          >
-            {isLogin ? 'Register' : 'Login'}
-          </button>
-        </p>
       </div>
     </div>
   );

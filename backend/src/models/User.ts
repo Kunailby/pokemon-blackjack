@@ -13,8 +13,7 @@ export interface IUser extends Document {
 
 const UserSchema = new Schema<IUser>({
   username: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  // email and password removed for username-only login
   chips: { type: Number, default: 1000 },
   totalGamesPlayed: { type: Number, default: 0 },
   totalWins: { type: Number, default: 0 },
