@@ -20,6 +20,8 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       localStorage.setItem('token', response.data.token);
       onAuthSuccess(response.data.user);
     } catch (err: any) {
+      // Log the full error for debugging
+      console.error('Login error:', err, err?.response);
       setError(err.response?.data?.error || 'Authentication failed');
     } finally {
       setLoading(false);

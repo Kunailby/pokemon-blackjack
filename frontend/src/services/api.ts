@@ -1,6 +1,6 @@
 
 import axios from 'axios';
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://pokemon-blackjack-28yc.onrender.com/api';
 const apiClient = axios.create({ baseURL: API_BASE_URL });
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
