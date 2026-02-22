@@ -43,9 +43,9 @@ function App() {
       try {
         setMessage('Fetching Pokemon cards from TCG database...');
         
-        // Fetch cards from multiple sets for variety
+        // Fetch 250 unique cards (max allowed by API)
         const response = await fetch(
-          'https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=100'
+          'https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250'
         );
         const data = await response.json();
         
@@ -64,9 +64,8 @@ function App() {
         }
         
         setAllCards(validCards);
-        // Create deck with duplicates for more cards
-        const deckCards = [...validCards, ...validCards];
-        setDeck(shuffleArray(deckCards));
+        // Use all unique cards - no duplicates
+        setDeck(shuffleArray(validCards));
         setMessage('Place your bet to start!');
         setGameState('betting');
       } catch (error) {
@@ -93,8 +92,8 @@ function App() {
         ];
         
         setAllCards(fallbackCards);
-        const deckCards = [...fallbackCards, ...fallbackCards, ...fallbackCards, ...fallbackCards];
-        setDeck(shuffleArray(deckCards));
+        // Use all unique cards - no duplicates
+        setDeck(shuffleArray(fallbackCards));
         setMessage('Place your bet to start!');
         setGameState('betting');
       }
@@ -114,7 +113,7 @@ function App() {
       return;
     }
     
-    let newDeck = deck.length < 20 ? shuffleArray([...allCards, ...allCards]) : [...deck];
+    let newDeck = deck.length < 10 ? shuffleArray([...allCards]) : [...deck];
     
     // Deal cards
     const p1 = newDeck.pop()!;
