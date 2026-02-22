@@ -224,6 +224,7 @@ function App() {
     };
     
     dealerPlay();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState]);
 
   const newRound = () => {
