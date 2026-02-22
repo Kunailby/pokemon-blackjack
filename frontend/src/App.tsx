@@ -12,29 +12,7 @@ interface PokemonCard {
 }
 
 function calculateTotal(hand: PokemonCard[]): number {
-  let total = 0;
-  let lowHpCards = 0; // Cards with HP <= 40 can act like Aces
-  
-  for (const card of hand) {
-    // Normalize HP to blackjack-friendly values (divide by 10, max 11)
-    let value = Math.min(Math.floor(card.hp / 10), 11);
-    if (value === 0) value = 1;
-    
-    if (value <= 4) {
-      lowHpCards++;
-      total += 11; // Low HP cards start as 11 (like Ace)
-    } else {
-      total += value;
-    }
-  }
-  
-  // Adjust low HP cards (like Aces) if over 21
-  while (total > 21 && lowHpCards > 0) {
-    total -= 10;
-    lowHpCards--;
-  }
-  
-  return total;
+  return hand.reduce((sum, card) => sum + card.hp, 0);
 }
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -150,10 +128,10 @@ function App() {
     setChips(chips - bet);
     setGameState('playing');
     
-    // Check for blackjack (21)
+    // Check for blackjack (400 HP)
     const playerTotal = calculateTotal([p1, p2]);
-    if (playerTotal === 21) {
-      setMessage('BLACKJACK! 🎉');
+    if (playerTotal === 400) {
+      setMessage('BLACKJACK! 400 HP! 🎉');
       setTimeout(() => setGameState('dealer-turn'), 1000);
     } else {
       setMessage('Hit or Stand?');
@@ -170,11 +148,11 @@ function App() {
     setPlayerHand(newHand);
     
     const total = calculateTotal(newHand);
-    if (total > 21) {
-      setMessage('BUST! You lose 💥');
+    if (total > 400) {
+      setMessage('BUST! Over 400 HP! 💥');
       setGameState('game-over');
-    } else if (total === 21) {
-      setMessage('21! Dealer\'s turn...');
+    } else if (total === 400) {
+      setMessage('400 HP! Dealer\'s turn...');
       setTimeout(() => setGameState('dealer-turn'), 1000);
     }
   };
@@ -193,8 +171,8 @@ function App() {
       let currentDeck = [...deck];
       let currentDealerHand = [...dealerHand];
       
-      // Dealer draws until 17 or higher
-      while (calculateTotal(currentDealerHand) < 17 && currentDeck.length > 0) {
+      // Dealer draws until 301 HP or higher
+      while (calculateTotal(currentDealerHand) < 301 && currentDeck.length > 0) {
         await new Promise(r => setTimeout(r, 1000));
         const card = currentDeck.pop()!;
         currentDealerHand = [...currentDealerHand, card];
@@ -207,8 +185,8 @@ function App() {
       
       await new Promise(r => setTimeout(r, 800));
       
-      if (dealerTotal > 21) {
-        setMessage('Dealer BUSTS! You WIN! 🎉');
+      if (dealerTotal > 400) {
+        setMessage('Dealer BUSTS! Over 400 HP! You WIN! 🎉');
         setChips(c => c + bet * 2);
       } else if (playerTotal > dealerTotal) {
         setMessage('You WIN! 🎉');
@@ -241,8 +219,7 @@ function App() {
   };
 
   const getCardValue = (card: PokemonCard): number => {
-    let value = Math.min(Math.floor(card.hp / 10), 11);
-    return value === 0 ? 1 : value;
+    return card.hp;
   };
 
   if (gameState === 'loading') {
