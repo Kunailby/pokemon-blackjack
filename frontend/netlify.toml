@@ -1,5 +1,5 @@
 [build]
-  command = "CI=false npm install && npm run build"
+  command = "CI=false npm ci --legacy-peer-deps && npm run build"
   publish = "build"
 
 [[redirects]]
@@ -9,6 +9,7 @@
 
 [build.environment]
   NODE_OPTIONS = "--openssl-legacy-provider"
+  NODE_ENV = "production"
 
 [dev]
   command = "npm start"
