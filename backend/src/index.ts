@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import mongoose from 'mongoose';
 import { Server } from 'socket.io';
 import http from 'http';
@@ -20,6 +21,10 @@ const io = new Server(server, {
 });
 
 // Middleware
+app.use(cors({
+  origin: 'https://pkmbkj.netlify.app',
+  credentials: true
+}));
 app.use(express.json());
 
 // MongoDB Connection
