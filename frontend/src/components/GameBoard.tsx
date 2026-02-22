@@ -2,7 +2,6 @@ import React from 'react';
 import './GameBoard.css';
 import { Card } from './Card';
 import { playService } from '../services/playService';
-import { gameService } from '../services/api';
 import { GameTable, GameResult } from '../types/game';
 
 interface GameBoardProps {
@@ -24,7 +23,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
-  const loadGameState = async () => {
+  const loadGameState = React.useCallback(async () => {
     try {
       const response = await playService.getGameState(tableId);
       const gameData = response.data;
@@ -33,13 +32,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     } catch (err) {
       console.error('Failed to load game state:', err);
     }
-  };
+  }, [tableId]);
 
   React.useEffect(() => {
     loadGameState();
     const interval = setInterval(loadGameState, 2000);
     return () => clearInterval(interval);
-  }, [tableId]);
+  }, [loadGameState]);
 
   const handleDeal = async () => {
     setLoading(true);
@@ -92,7 +91,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     }
   };
 
-  const currentPlayer = game?.players.find((p) => p._id === userId);
   const allPlayersStanding = game?.players.every((p) => p.isStanding || p.totalHP > 400);
 
   return (
