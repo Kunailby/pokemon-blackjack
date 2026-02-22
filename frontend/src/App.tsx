@@ -1,20 +1,21 @@
 import React from 'react';
 import './App.css';
-import { Auth } from './components/Auth';
+// import { Auth } from './components/Auth';
 import { Lobby } from './components/Lobby';
 import { GameBoard } from './components/GameBoard';
 
-type Page = 'auth' | 'lobby' | 'game';
+type Page = 'lobby' | 'game';
 
 function App() {
-  const [page, setPage] = React.useState<Page>('auth');
+  const [page, setPage] = React.useState<Page>('lobby');
   const [user, setUser] = React.useState<any>(null);
   const [tableId, setTableId] = React.useState<string>('');
 
-  const handleAuthSuccess = (userData: any) => {
-    setUser(userData);
-    setPage('lobby');
-  };
+  React.useEffect(() => {
+    // Generate random username on load
+    const randomName = 'Player' + Math.floor(Math.random() * 10000);
+    setUser({ username: randomName });
+  }, []);
 
   const handleGameSelected = (id: string) => {
     setTableId(id);
@@ -33,16 +34,8 @@ function App() {
 
   return (
     <div className="app">
-      {page === 'auth' && <Auth onAuthSuccess={handleAuthSuccess} />}
       {page === 'lobby' && user && (
-        <div>
-          <div className="logout-btn-container">
-            <button onClick={handleLogout} className="logout-btn">
-              Logout
-            </button>
-          </div>
-          <Lobby user={user} onGameSelected={handleGameSelected} />
-        </div>
+        <Lobby user={user} onGameSelected={handleGameSelected} />
       )}
       {page === 'game' && user && (
         <GameBoard
