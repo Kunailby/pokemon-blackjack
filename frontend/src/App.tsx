@@ -26,12 +26,6 @@ function App() {
     setPage('lobby');
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
-    setPage('lobby');
-  };
-
   return (
     <div className="app">
       {page === 'lobby' && user && (
