@@ -251,7 +251,7 @@ function App() {
       await new Promise(r => setTimeout(r, 800));
 
       const saveWin = (hand: PokemonCard[], wonBet: number) => {
-        Promise.all(hand.map(fetchPokemonSprite)).then(sprites => {
+        Promise.all(hand.map(c => fetchPokemonSprite(c.name))).then(sprites => {
           const entry: HallOfFameEntry = {
             id: `${Date.now()}`,
             playerName,
