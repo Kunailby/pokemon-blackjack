@@ -252,31 +252,42 @@ function App() {
     setGameState('betting');
   };
 
-  const getCardValue = (card: PokemonCard): number => {
-    return card.hp;
-  };
-
   if (gameState === 'loading') {
     return (
       <div className="app">
-        <div className="game-container loading-container">
-          <h1>🎴 Pokémon Blackjack 🎴</h1>
-          <div className="loading-spinner"></div>
+        <div className="loading-container">
+          <div className="loading-spinner" />
           <p className="loading-text">{message}</p>
         </div>
       </div>
     );
   }
 
+  const dealerTotal = calculateTotal(dealerHand);
+  const showDealerTotal = gameState !== 'betting' && gameState !== 'playing';
+
   return (
     <div className="app">
       <div className="game-container">
-        <h1>🎴 Pokémon Blackjack 🎴</h1>
-        <p className="player-info">{playerName} • Chips: ${chips}</p>
-        
-        {/* Dealer's Hand */}
-        <div className="hand-section dealer-section">
-          <h3>Dealer {gameState !== 'betting' && `(${gameState === 'playing' ? '?' : calculateTotal(dealerHand)})`}</h3>
+
+        {/* Header */}
+        <header className="header">
+          <span className="header-title">Pokémon <span>Blackjack</span></span>
+          <div className="header-chips">
+            <span className="chips-label">Chips</span>
+            <span className="chips-value">${chips.toLocaleString()}</span>
+          </div>
+          <span className="player-tag">{playerName}</span>
+        </header>
+
+        {/* Dealer */}
+        <div className="panel">
+          <div className="panel-label">
+            Dealer
+            <span className={`total-badge${showDealerTotal ? '' : ' hidden'}`}>
+              {dealerTotal} HP
+            </span>
+          </div>
           <div className="hand">
             {dealerHand.map((card, idx) => (
               <div
@@ -291,17 +302,22 @@ function App() {
                 ) : (
                   <>
                     <img src={card.images.small} alt={card.name} className="card-image" />
-                    <div className="card-value">Value: {getCardValue(card)}</div>
+                    <span className="card-hp">{card.hp} HP</span>
                   </>
                 )}
               </div>
             ))}
           </div>
         </div>
-        
-        {/* Player's Hand */}
-        <div className="hand-section player-section">
-          <h3>Your Hand ({displayedPlayerTotal || ''})</h3>
+
+        {/* Player */}
+        <div className="panel">
+          <div className="panel-label">
+            Your Hand
+            <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}`}>
+              {displayedPlayerTotal} HP
+            </span>
+          </div>
           <div className="hand">
             {playerHand.map((card, idx) => (
               <div
@@ -310,47 +326,61 @@ function App() {
                 style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
               >
                 <img src={card.images.small} alt={card.name} className="card-image" />
-                <div className="card-value">Value: {getCardValue(card)}</div>
+                <span className="card-hp">{card.hp} HP</span>
               </div>
             ))}
           </div>
         </div>
-        
+
         {/* Message */}
-        <div className="message">{message}</div>
-        
+        <div className="message-panel">
+          <p className="message-text">{message}</p>
+        </div>
+
         {/* Controls */}
-        <div className="controls">
+        <div className="controls-panel">
           {gameState === 'betting' && (
-            <div className="betting-controls">
-              <div className="bet-display">Current Bet: ${bet}</div>
-              <div className="bet-buttons">
-                <button onClick={() => placeBet(10)} disabled={chips < 10}>$10</button>
-                <button onClick={() => placeBet(25)} disabled={chips < 25}>$25</button>
-                <button onClick={() => placeBet(50)} disabled={chips < 50}>$50</button>
-                <button onClick={() => placeBet(100)} disabled={chips < 100}>$100</button>
+            <>
+              <span className="bet-label">Place your bet</span>
+              <div className="bet-row">
+                {[10, 25, 50, 100].map(amount => (
+                  <button
+                    key={amount}
+                    className={`chip-btn${bet === amount ? ' selected' : ''}`}
+                    onClick={() => placeBet(amount)}
+                    disabled={chips < amount}
+                  >
+                    ${amount}
+                  </button>
+                ))}
               </div>
-              <button className="deal-btn" onClick={startGame} disabled={bet === 0}>
-                DEAL
+              {bet > 0 && <p className="bet-display">Betting <strong>${bet}</strong></p>}
+              <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>
+                Deal
               </button>
-            </div>
+            </>
           )}
-          
+
           {gameState === 'playing' && (
-            <div className="play-controls">
-              <button onClick={hit} className="hit-btn">HIT</button>
-              <button onClick={stand} className="stand-btn">STAND</button>
+            <div className="play-buttons">
+              <button className="btn-primary btn-hit" onClick={hit}>Hit</button>
+              <button className="btn-primary btn-stand" onClick={stand}>Stand</button>
             </div>
           )}
-          
+
+          {gameState === 'dealer-turn' && (
+            <p className="bet-display">Dealer is playing…</p>
+          )}
+
           {gameState === 'game-over' && (
-            <button onClick={newRound} className="new-round-btn">
-              NEW ROUND
+            <button className="btn-primary btn-new-round" onClick={newRound}>
+              New Round
             </button>
           )}
         </div>
-        
-        <p className="deck-info">Cards in deck: {deck.length}</p>
+
+        <p className="footer">{deck.length} cards remaining</p>
+
       </div>
     </div>
   );
