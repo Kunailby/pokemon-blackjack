@@ -27,6 +27,33 @@ function shuffleArray<T>(array: T[]): T[] {
 
 type GameState = 'loading' | 'betting' | 'playing' | 'dealer-turn' | 'game-over';
 
+interface HallOfFameEntry {
+  id: string;
+  playerName: string;
+  bet: number;
+  pokemonNames: string[];
+  sprites: string[];
+  date: string;
+}
+
+async function fetchPokemonSprite(cardName: string): Promise<string> {
+  const toSlug = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  // Try first word first (e.g. "Charizard ex" → "charizard"), then full name
+  const attempts = [toSlug(cardName.split(' ')[0]), toSlug(cardName)]
+    .filter((v, i, a) => v && a.indexOf(v) === i);
+  for (const name of attempts) {
+    try {
+      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.sprites?.front_default) return data.sprites.front_default;
+      }
+    } catch { /* try next */ }
+  }
+  return '';
+}
+
 function App() {
   const [allCards, setAllCards] = useState<PokemonCard[]>([]);
   const [deck, setDeck] = useState<PokemonCard[]>([]);
@@ -38,6 +65,10 @@ function App() {
   const [message, setMessage] = useState('Loading Pokemon cards...');
   const [playerName] = useState('Trainer' + Math.floor(Math.random() * 1000));
   const [displayedPlayerTotal, setDisplayedPlayerTotal] = useState(0);
+  const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>(() => {
+    try { return JSON.parse(localStorage.getItem('pkmbkj-hof') ?? '[]'); }
+    catch { return []; }
+  });
 
   // Fetch cards from Pokemon TCG API on mount
   useEffect(() => {
@@ -112,9 +143,13 @@ function App() {
   }, []);
 
   const placeBet = (amount: number) => {
-    if (amount > chips) return;
-    setBet(amount);
+    setBet(prev => {
+      const next = prev + amount;
+      return next > chips ? prev : next;
+    });
   };
+
+  const clearBet = () => setBet(0);
 
   const startGame = () => {
     if (bet === 0) {
@@ -215,14 +250,34 @@ function App() {
 
       await new Promise(r => setTimeout(r, 800));
 
+      const saveWin = (hand: PokemonCard[], wonBet: number) => {
+        Promise.all(hand.map(fetchPokemonSprite)).then(sprites => {
+          const entry: HallOfFameEntry = {
+            id: `${Date.now()}`,
+            playerName,
+            bet: wonBet,
+            pokemonNames: hand.map(c => c.name),
+            sprites,
+            date: new Date().toLocaleDateString(),
+          };
+          setHallOfFame(prev => {
+            const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 5);
+            localStorage.setItem('pkmbkj-hof', JSON.stringify(updated));
+            return updated;
+          });
+        });
+      };
+
       if (dealerTotal > 400) {
         playWin();
         setMessage('Dealer BUSTS! Over 400 HP! You WIN! 🎉');
         setChips(c => c + bet * 2);
+        saveWin(playerHand, bet);
       } else if (playerTotal > dealerTotal) {
         playWin();
         setMessage('You WIN! 🎉');
         setChips(c => c + bet * 2);
+        saveWin(playerHand, bet);
       } else if (dealerTotal > playerTotal) {
         playLose();
         setMessage('Dealer wins 😢');
@@ -346,15 +401,22 @@ function App() {
                 {[10, 25, 50, 100].map(amount => (
                   <button
                     key={amount}
-                    className={`chip-btn${bet === amount ? ' selected' : ''}`}
+                    className="chip-btn"
                     onClick={() => placeBet(amount)}
-                    disabled={chips < amount}
+                    disabled={bet + amount > chips}
                   >
-                    ${amount}
+                    +${amount}
                   </button>
                 ))}
               </div>
-              {bet > 0 && <p className="bet-display">Betting <strong>${bet}</strong></p>}
+              <div className="bet-summary">
+                <span className="bet-display">
+                  {bet > 0 ? <>Betting <strong>${bet}</strong></> : <span className="bet-empty">Select chips to bet</span>}
+                </span>
+                {bet > 0 && (
+                  <button className="clear-btn" onClick={clearBet}>Clear</button>
+                )}
+              </div>
               <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>
                 Deal
               </button>
@@ -380,6 +442,42 @@ function App() {
         </div>
 
         <p className="footer">{deck.length} cards remaining</p>
+
+        {/* Hall of Fame */}
+        <div className="hof-panel">
+          <div className="hof-header">
+            <span className="hof-title">Hall of Fame</span>
+            <span className="hof-subtitle">Top 5 winning bets</span>
+          </div>
+          {hallOfFame.length === 0 ? (
+            <p className="hof-empty">No wins recorded yet. Make your first bet!</p>
+          ) : (
+            <ol className="hof-list">
+              {hallOfFame.map((entry, i) => (
+                <li key={entry.id} className="hof-entry">
+                  <span className="hof-rank">#{i + 1}</span>
+                  <div className="hof-info">
+                    <span className="hof-name">{entry.playerName}</span>
+                    <span className="hof-meta">${entry.bet} bet · {entry.date}</span>
+                  </div>
+                  <div className="hof-team">
+                    {entry.sprites.map((src, j) => (
+                      src
+                        ? <img
+                            key={j}
+                            src={src}
+                            alt={entry.pokemonNames[j]}
+                            title={entry.pokemonNames[j]}
+                            className="hof-sprite"
+                          />
+                        : <span key={j} className="hof-sprite-fallback" title={entry.pokemonNames[j]}>?</span>
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
 
       </div>
     </div>
