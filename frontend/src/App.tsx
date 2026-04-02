@@ -37,11 +37,22 @@ interface HallOfFameEntry {
 }
 
 async function fetchPokemonSprite(cardName: string): Promise<string> {
+  // Strip common TCG suffixes to get the base Pokemon name
+  const base = cardName
+    .replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|VUNION|BREAK|LV\.X|δ|\d+)(\s|$)/gi, ' ')
+    .replace(/^(Dark|Light|Team Rocket's|Rocket's|Gym|M\s)\s*/i, '')
+    .trim();
+
   const toSlug = (s: string) =>
     s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  // Try first word first (e.g. "Charizard ex" → "charizard"), then full name
-  const attempts = [toSlug(cardName.split(' ')[0]), toSlug(cardName)]
-    .filter((v, i, a) => v && a.indexOf(v) === i);
+
+  const attempts = [
+    toSlug(base.split(' ')[0]),
+    toSlug(base),
+    toSlug(cardName.split(' ')[0]),
+    toSlug(cardName),
+  ].filter((v, i, a) => Boolean(v) && a.indexOf(v) === i);
+
   for (const name of attempts) {
     try {
       const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
@@ -250,21 +261,24 @@ function App() {
 
       await new Promise(r => setTimeout(r, 800));
 
-      const saveWin = (hand: PokemonCard[], wonBet: number) => {
-        Promise.all(hand.map(c => fetchPokemonSprite(c.name))).then(sprites => {
-          const entry: HallOfFameEntry = {
-            id: `${Date.now()}`,
-            playerName,
-            bet: wonBet,
-            pokemonNames: hand.map(c => c.name),
-            sprites,
-            date: new Date().toLocaleDateString(),
-          };
-          setHallOfFame(prev => {
-            const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 5);
-            localStorage.setItem('pkmbkj-hof', JSON.stringify(updated));
-            return updated;
-          });
+      const saveWin = async (hand: PokemonCard[], wonBet: number) => {
+        // Sequential to avoid rate-limiting the PokeAPI
+        const sprites: string[] = [];
+        for (const c of hand) {
+          sprites.push(await fetchPokemonSprite(c.name));
+        }
+        const entry: HallOfFameEntry = {
+          id: `${Date.now()}`,
+          playerName,
+          bet: wonBet,
+          pokemonNames: hand.map(c => c.name),
+          sprites,
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        };
+        setHallOfFame(prev => {
+          const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 5);
+          localStorage.setItem('pkmbkj-hof', JSON.stringify(updated));
+          return updated;
         });
       };
 
@@ -455,10 +469,12 @@ function App() {
             <ol className="hof-list">
               {hallOfFame.map((entry, i) => (
                 <li key={entry.id} className="hof-entry">
-                  <span className="hof-rank">#{i + 1}</span>
-                  <div className="hof-info">
-                    <span className="hof-name">{entry.playerName}</span>
-                    <span className="hof-meta">${entry.bet} bet · {entry.date}</span>
+                  <div className="hof-entry-top">
+                    <span className="hof-rank">#{i + 1}</span>
+                    <div className="hof-info">
+                      <span className="hof-name">{entry.playerName}</span>
+                      <span className="hof-meta">${entry.bet} bet · {entry.date}</span>
+                    </div>
                   </div>
                   <div className="hof-team">
                     {entry.sprites.map((src, j) => (
@@ -466,7 +482,7 @@ function App() {
                         ? <img
                             key={j}
                             src={src}
-                            alt={entry.pokemonNames[j]}
+                            alt=""
                             title={entry.pokemonNames[j]}
                             className="hof-sprite"
                           />

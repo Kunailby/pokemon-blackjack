@@ -539,17 +539,24 @@ body::after {
 
 .hof-entry {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  gap: 10px;
   padding: 14px 16px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   transition: background 0.15s;
+  overflow: hidden;
 }
 
 .hof-entry:hover {
   background: var(--glass-hover);
+}
+
+.hof-entry-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .hof-rank {
@@ -557,14 +564,14 @@ body::after {
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--gold);
-  min-width: 24px;
+  min-width: 28px;
+  flex-shrink: 0;
 }
 
 .hof-info {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  flex: 1;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -580,14 +587,16 @@ body::after {
 .hof-meta {
   font-size: 0.72rem;
   color: var(--text-muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 .hof-team {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   align-items: center;
-  flex-shrink: 0;
+  padding-left: 40px;
 }
 
 .hof-sprite {
