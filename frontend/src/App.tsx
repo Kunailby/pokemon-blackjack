@@ -1,31 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { playCardDeal, playShuffle, playWin, playLose, playBust } from './sounds';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PokemonCard {
   id: string;
   name: string;
   hp: number;
-  images: {
-    small: string;
-    large: string;
-  };
+  images: { small: string; large: string };
 }
-
-function calculateTotal(hand: PokemonCard[]): number {
-  return hand.reduce((sum, card) => sum + card.hp, 0);
-}
-
-function shuffleArray<T>(array: T[]): T[] {
-  const newArray = [...array];
-  for (let i = newArray.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-  }
-  return newArray;
-}
-
-type GameState = 'loading' | 'betting' | 'playing' | 'dealer-turn' | 'game-over';
 
 interface HallOfFameEntry {
   id: string;
@@ -36,15 +20,77 @@ interface HallOfFameEntry {
   date: string;
 }
 
+interface UserData {
+  passwordHash: string;
+  chips: number;
+  lastDailyBonus: string; // ISO timestamp
+}
+
+type UserStore = Record<string, UserData>;
+type GameState = 'auth' | 'loading' | 'betting' | 'playing' | 'dealer-turn' | 'game-over';
+
+// ── Pure utilities ────────────────────────────────────────────────────────────
+
+function calculateTotal(hand: PokemonCard[]): number {
+  return hand.reduce((sum, c) => sum + c.hp, 0);
+}
+
+function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function hashPassword(password: string): string {
+  let hash = 5381;
+  for (let i = 0; i < password.length; i++) {
+    hash = ((hash << 5) + hash) ^ password.charCodeAt(i);
+    hash = hash >>> 0;
+  }
+  return hash.toString(36);
+}
+
+function loadUsers(): UserStore {
+  try { return JSON.parse(localStorage.getItem('pkmbkj-users') ?? '{}'); }
+  catch { return {}; }
+}
+
+function saveUsers(users: UserStore): void {
+  localStorage.setItem('pkmbkj-users', JSON.stringify(users));
+}
+
+const BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+function canClaimBonus(lastDailyBonus: string): boolean {
+  if (!lastDailyBonus) return true;
+  return Date.now() - new Date(lastDailyBonus).getTime() >= BONUS_INTERVAL_MS;
+}
+
+function bonusCountdown(lastDailyBonus: string): string {
+  const next = new Date(lastDailyBonus).getTime() + BONUS_INTERVAL_MS;
+  const diff = Math.max(0, next - Date.now());
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  return `${h}h ${m}m`;
+}
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
 async function fetchPokemonSprite(cardName: string): Promise<string> {
-  // Strip common TCG suffixes to get the base Pokemon name
   const base = cardName
     .replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|VUNION|BREAK|LV\.X|δ|\d+)(\s|$)/gi, ' ')
     .replace(/^(Dark|Light|Team Rocket's|Rocket's|Gym|M\s)\s*/i, '')
     .trim();
 
   const toSlug = (s: string) =>
-    s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    s.toLowerCase()
+      .replace(/♀/g, '-f').replace(/♂/g, '-m')
+      .replace(/['.]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
 
   const attempts = [
     toSlug(base.split(' ')[0]),
@@ -65,190 +111,240 @@ async function fetchPokemonSprite(cardName: string): Promise<string> {
   return '';
 }
 
+// ── Fallback deck ─────────────────────────────────────────────────────────────
+
+const FALLBACK_CARDS: PokemonCard[] = [
+  { id: 'base1-4',  name: 'Charizard',  hp: 120, images: { small: 'https://images.pokemontcg.io/base1/4.png',  large: 'https://images.pokemontcg.io/base1/4_hires.png'  }},
+  { id: 'base1-2',  name: 'Blastoise',  hp: 100, images: { small: 'https://images.pokemontcg.io/base1/2.png',  large: 'https://images.pokemontcg.io/base1/2_hires.png'  }},
+  { id: 'base1-15', name: 'Venusaur',   hp: 100, images: { small: 'https://images.pokemontcg.io/base1/15.png', large: 'https://images.pokemontcg.io/base1/15_hires.png' }},
+  { id: 'base1-58', name: 'Pikachu',    hp:  40, images: { small: 'https://images.pokemontcg.io/base1/58.png', large: 'https://images.pokemontcg.io/base1/58_hires.png' }},
+  { id: 'base1-10', name: 'Mewtwo',     hp:  60, images: { small: 'https://images.pokemontcg.io/base1/10.png', large: 'https://images.pokemontcg.io/base1/10_hires.png' }},
+  { id: 'base1-8',  name: 'Machamp',    hp: 100, images: { small: 'https://images.pokemontcg.io/base1/8.png',  large: 'https://images.pokemontcg.io/base1/8_hires.png'  }},
+  { id: 'base2-20', name: 'Gengar',     hp:  80, images: { small: 'https://images.pokemontcg.io/base2/20.png', large: 'https://images.pokemontcg.io/base2/20_hires.png' }},
+  { id: 'base4-4',  name: 'Dragonite',  hp: 100, images: { small: 'https://images.pokemontcg.io/base4/4.png',  large: 'https://images.pokemontcg.io/base4/4_hires.png'  }},
+  { id: 'base1-7',  name: 'Hitmonchan', hp:  70, images: { small: 'https://images.pokemontcg.io/base1/7.png',  large: 'https://images.pokemontcg.io/base1/7_hires.png'  }},
+  { id: 'base1-3',  name: 'Chansey',    hp: 120, images: { small: 'https://images.pokemontcg.io/base1/3.png',  large: 'https://images.pokemontcg.io/base1/3_hires.png'  }},
+  { id: 'base1-1',  name: 'Alakazam',   hp:  80, images: { small: 'https://images.pokemontcg.io/base1/1.png',  large: 'https://images.pokemontcg.io/base1/1_hires.png'  }},
+  { id: 'base1-6',  name: 'Gyarados',   hp: 100, images: { small: 'https://images.pokemontcg.io/base1/6.png',  large: 'https://images.pokemontcg.io/base1/6_hires.png'  }},
+  { id: 'base1-26', name: 'Dratini',    hp:  40, images: { small: 'https://images.pokemontcg.io/base1/26.png', large: 'https://images.pokemontcg.io/base1/26_hires.png' }},
+  { id: 'base1-56', name: 'Onix',       hp:  90, images: { small: 'https://images.pokemontcg.io/base1/56.png', large: 'https://images.pokemontcg.io/base1/56_hires.png' }},
+  { id: 'base1-54', name: 'Jigglypuff', hp:  60, images: { small: 'https://images.pokemontcg.io/base1/54.png', large: 'https://images.pokemontcg.io/base1/54_hires.png' }},
+];
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 function App() {
-  const [allCards, setAllCards] = useState<PokemonCard[]>([]);
-  const [deck, setDeck] = useState<PokemonCard[]>([]);
+  // Auth state
+  const [gameState, setGameState]     = useState<GameState>('auth');
+  const [currentUser, setCurrentUser] = useState('');
+  const [authUsername, setAuthUsername] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError]     = useState('');
+  const loginBonusRef = useRef(''); // message shown after loading completes
+
+  // Game state
+  const [allCards, setAllCards]   = useState<PokemonCard[]>([]);
+  const [deck, setDeck]           = useState<PokemonCard[]>([]);
   const [playerHand, setPlayerHand] = useState<PokemonCard[]>([]);
   const [dealerHand, setDealerHand] = useState<PokemonCard[]>([]);
-  const [chips, setChips] = useState(1000);
-  const [bet, setBet] = useState(0);
-  const [gameState, setGameState] = useState<GameState>('loading');
-  const [message, setMessage] = useState('Loading Pokemon cards...');
-  const [playerName] = useState('Trainer' + Math.floor(Math.random() * 1000));
+  const [chips, setChips]         = useState(1000);
+  const [bet, setBet]             = useState(0);
+  const [message, setMessage]     = useState('');
   const [displayedPlayerTotal, setDisplayedPlayerTotal] = useState(0);
+
+  // Hall of Fame
   const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem('pkmbkj-hof') ?? '[]'); }
     catch { return []; }
   });
 
-  // Fetch cards from Pokemon TCG API on mount
+  // ── Persist chips on every change ─────────────────────────────────────────
   useEffect(() => {
-    const fetchCards = async () => {
-      try {
-        setMessage('Fetching Pokemon cards from TCG database...');
+    if (!currentUser) return;
+    const users = loadUsers();
+    if (users[currentUser]) {
+      users[currentUser].chips = chips;
+      saveUsers(users);
+    }
+  }, [chips, currentUser]);
 
-        // Fetch cards from multiple pages to get diverse Pokemon
-        const fetchPage = (page: number) =>
-          fetch(
-            `https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250&page=${page}`
-          ).then(r => r.json());
-
-        const [page1, page2] = await Promise.all([fetchPage(1), fetchPage(2)]);
-        const rawCards = [...(page1.data ?? []), ...(page2.data ?? [])];
-
-        // Keep one card per Pokemon name (first encountered), require HP + image
-        const seenNames = new Set<string>();
-        const validCards: PokemonCard[] = [];
-        for (const card of rawCards) {
-          if (!card.hp || parseInt(card.hp) <= 0 || !card.images?.small) continue;
-          if (seenNames.has(card.name)) continue;
-          seenNames.add(card.name);
-          validCards.push({
-            id: card.id,
-            name: card.name,
-            hp: parseInt(card.hp),
-            images: card.images,
-          });
+  // ── Re-fetch missing sprites for cached HoF entries on mount ──────────────
+  useEffect(() => {
+    if (hallOfFame.length === 0) return;
+    const refetch = async () => {
+      const entries = hallOfFame.map(e => ({ ...e, sprites: [...e.sprites] }));
+      let changed = false;
+      for (const entry of entries) {
+        if (entry.sprites.every(s => s)) continue; // all loaded already
+        for (let j = 0; j < entry.pokemonNames.length; j++) {
+          if (!entry.sprites[j]) {
+            entry.sprites[j] = await fetchPokemonSprite(entry.pokemonNames[j]);
+            await sleep(150);
+            changed = true;
+          }
         }
-
-        if (validCards.length < 20) {
-          throw new Error('Not enough cards fetched');
-        }
-
-        setAllCards(validCards);
-        setDeck(shuffleArray(validCards));
-        setMessage('Place your bet to start!');
-        setGameState('betting');
-      } catch (error) {
-        console.error('Error fetching cards:', error);
-        setMessage('Error loading cards. Using backup set...');
-        
-        // Fallback to hardcoded cards with real images
-        const fallbackCards: PokemonCard[] = [
-          { id: 'base1-4', name: 'Charizard', hp: 120, images: { small: 'https://images.pokemontcg.io/base1/4.png', large: 'https://images.pokemontcg.io/base1/4_hires.png' }},
-          { id: 'base1-2', name: 'Blastoise', hp: 100, images: { small: 'https://images.pokemontcg.io/base1/2.png', large: 'https://images.pokemontcg.io/base1/2_hires.png' }},
-          { id: 'base1-15', name: 'Venusaur', hp: 100, images: { small: 'https://images.pokemontcg.io/base1/15.png', large: 'https://images.pokemontcg.io/base1/15_hires.png' }},
-          { id: 'base1-58', name: 'Pikachu', hp: 40, images: { small: 'https://images.pokemontcg.io/base1/58.png', large: 'https://images.pokemontcg.io/base1/58_hires.png' }},
-          { id: 'base1-10', name: 'Mewtwo', hp: 60, images: { small: 'https://images.pokemontcg.io/base1/10.png', large: 'https://images.pokemontcg.io/base1/10_hires.png' }},
-          { id: 'base1-8', name: 'Machamp', hp: 100, images: { small: 'https://images.pokemontcg.io/base1/8.png', large: 'https://images.pokemontcg.io/base1/8_hires.png' }},
-          { id: 'base1-94', name: 'Gengar', hp: 80, images: { small: 'https://images.pokemontcg.io/base2/20.png', large: 'https://images.pokemontcg.io/base2/20_hires.png' }},
-          { id: 'base1-149', name: 'Dragonite', hp: 100, images: { small: 'https://images.pokemontcg.io/base4/4.png', large: 'https://images.pokemontcg.io/base4/4_hires.png' }},
-          { id: 'base1-7', name: 'Hitmonchan', hp: 70, images: { small: 'https://images.pokemontcg.io/base1/7.png', large: 'https://images.pokemontcg.io/base1/7_hires.png' }},
-          { id: 'base1-3', name: 'Chansey', hp: 120, images: { small: 'https://images.pokemontcg.io/base1/3.png', large: 'https://images.pokemontcg.io/base1/3_hires.png' }},
-          { id: 'base1-1', name: 'Alakazam', hp: 80, images: { small: 'https://images.pokemontcg.io/base1/1.png', large: 'https://images.pokemontcg.io/base1/1_hires.png' }},
-          { id: 'base1-6', name: 'Gyarados', hp: 100, images: { small: 'https://images.pokemontcg.io/base1/6.png', large: 'https://images.pokemontcg.io/base1/6_hires.png' }},
-          { id: 'base1-26', name: 'Dratini', hp: 40, images: { small: 'https://images.pokemontcg.io/base1/26.png', large: 'https://images.pokemontcg.io/base1/26_hires.png' }},
-          { id: 'base1-56', name: 'Onix', hp: 90, images: { small: 'https://images.pokemontcg.io/base1/56.png', large: 'https://images.pokemontcg.io/base1/56_hires.png' }},
-          { id: 'base1-35', name: 'Jigglypuff', hp: 60, images: { small: 'https://images.pokemontcg.io/base1/54.png', large: 'https://images.pokemontcg.io/base1/54_hires.png' }},
-        ];
-        
-        setAllCards(fallbackCards);
-        // Use all unique cards - no duplicates
-        setDeck(shuffleArray(fallbackCards));
-        setMessage('Place your bet to start!');
-        setGameState('betting');
+      }
+      if (changed) {
+        setHallOfFame(entries);
+        localStorage.setItem('pkmbkj-hof', JSON.stringify(entries));
       }
     };
-    
-    fetchCards();
-  }, []);
+    refetch();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const placeBet = (amount: number) => {
-    setBet(prev => {
-      const next = prev + amount;
-      return next > chips ? prev : next;
-    });
+  // ── Handle login / register ───────────────────────────────────────────────
+  const handleAuth = (e: React.FormEvent) => {
+    e.preventDefault();
+    const username = authUsername.trim();
+    const password = authPassword;
+    if (!username || !password) {
+      setAuthError('Please enter a username and password.');
+      return;
+    }
+    const users = loadUsers();
+    const hash  = hashPassword(password);
+    let startChips = 1000;
+    let bonusMsg   = '';
+
+    if (users[username]) {
+      if (users[username].passwordHash !== hash) {
+        setAuthError('Incorrect password.');
+        return;
+      }
+      startChips = users[username].chips;
+      if (canClaimBonus(users[username].lastDailyBonus)) {
+        startChips += 100;
+        users[username].chips = startChips;
+        users[username].lastDailyBonus = new Date().toISOString();
+        bonusMsg = '🎁 Daily bonus collected — +$100!';
+      }
+    } else {
+      // Auto-register
+      users[username] = {
+        passwordHash: hash,
+        chips: 1000,
+        lastDailyBonus: new Date().toISOString(),
+      };
+      bonusMsg = '👋 Welcome! You start with $1,000.';
+    }
+
+    saveUsers(users);
+    loginBonusRef.current = bonusMsg;
+    setCurrentUser(username);
+    setChips(startChips);
+    setAuthError('');
+    setGameState('loading');
   };
+
+  // ── Fetch cards (runs whenever gameState becomes 'loading') ───────────────
+  useEffect(() => {
+    if (gameState !== 'loading') return;
+    const fetchCards = async () => {
+      try {
+        const fetchPage = (page: number) =>
+          fetch(`https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250&page=${page}`)
+            .then(r => r.json());
+        const [p1, p2] = await Promise.all([fetchPage(1), fetchPage(2)]);
+        const raw = [...(p1.data ?? []), ...(p2.data ?? [])];
+        const seen = new Set<string>();
+        const valid: PokemonCard[] = [];
+        for (const c of raw) {
+          if (!c.hp || parseInt(c.hp) <= 0 || !c.images?.small) continue;
+          if (seen.has(c.name)) continue;
+          seen.add(c.name);
+          valid.push({ id: c.id, name: c.name, hp: parseInt(c.hp), images: c.images });
+        }
+        if (valid.length < 20) throw new Error('Too few cards');
+        setAllCards(valid);
+        setDeck(shuffleArray(valid));
+      } catch {
+        setAllCards(FALLBACK_CARDS);
+        setDeck(shuffleArray(FALLBACK_CARDS));
+      }
+      setMessage(loginBonusRef.current || 'Place your bet!');
+      loginBonusRef.current = '';
+      setGameState('betting');
+    };
+    fetchCards();
+  }, [gameState]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Betting ───────────────────────────────────────────────────────────────
+  const placeBet = (amount: number) =>
+    setBet(prev => prev + amount > chips ? prev : prev + amount);
 
   const clearBet = () => setBet(0);
 
+  // ── Start game ────────────────────────────────────────────────────────────
   const startGame = () => {
-    if (bet === 0) {
-      setMessage('Please place a bet first!');
-      return;
-    }
-
+    if (bet === 0) { setMessage('Please place a bet first!'); return; }
     const needsShuffle = deck.length < 10;
-    let newDeck = needsShuffle ? shuffleArray([...allCards]) : [...deck];
+    const newDeck = needsShuffle ? shuffleArray([...allCards]) : [...deck];
+    if (needsShuffle) playShuffle();
 
-    if (needsShuffle) {
-      playShuffle();
-    }
-
-    // Deal order: p1, d1, p2, d2 — interleaved like a real deal
     const p1 = newDeck.pop()!;
     const d1 = newDeck.pop()!;
     const p2 = newDeck.pop()!;
     const d2 = newDeck.pop()!;
 
-    // Staggered deal sounds matching animation delays
-    playCardDeal();                              // p1 at 0ms
-    setTimeout(() => playCardDeal(), 120);       // d1
-    setTimeout(() => playCardDeal(), 240);       // p2
-    setTimeout(() => playCardDeal(), 360);       // d2
+    playCardDeal();
+    setTimeout(() => playCardDeal(), 120);
+    setTimeout(() => playCardDeal(), 240);
+    setTimeout(() => playCardDeal(), 360);
 
-    // Show player total only after the last player card finishes animating
-    // p2 has delay 0.24s + animation 0.38s = ~620ms
-    const initialTotal = calculateTotal([p1, p2]);
-    setTimeout(() => setDisplayedPlayerTotal(initialTotal), 650);
+    setTimeout(() => setDisplayedPlayerTotal(calculateTotal([p1, p2])), 650);
 
     setDeck(newDeck);
     setPlayerHand([p1, p2]);
     setDealerHand([d1, d2]);
-    setChips(chips - bet);
+    setChips(c => c - bet);
     setGameState('playing');
 
-    // Check for blackjack (400 HP)
-    const playerTotal = calculateTotal([p1, p2]);
-    if (playerTotal === 400) {
-      setMessage('BLACKJACK! 400 HP! 🎉');
+    if (calculateTotal([p1, p2]) === 400) {
+      setMessage('BLACKJACK! 400 HP!');
       setTimeout(() => setGameState('dealer-turn'), 1000);
     } else {
       setMessage('Hit or Stand?');
     }
   };
 
+  // ── Hit ───────────────────────────────────────────────────────────────────
   const hit = () => {
     if (gameState !== 'playing') return;
-
     playCardDeal();
     const newDeck = [...deck];
-    const card = newDeck.pop()!;
+    const card    = newDeck.pop()!;
     const newHand = [...playerHand, card];
     setDeck(newDeck);
     setPlayerHand(newHand);
-
-    // Hit cards animate with 0s delay + 0.38s duration; update total after
     const total = calculateTotal(newHand);
     setTimeout(() => setDisplayedPlayerTotal(total), 430);
-
     if (total > 400) {
       setTimeout(() => playBust(), 120);
-      setMessage('BUST! Over 400 HP! 💥');
+      setMessage('BUST! Over 400 HP!');
       setGameState('game-over');
     } else if (total === 400) {
-      setMessage('400 HP! Dealer\'s turn...');
+      setMessage("400 HP! Dealer's turn…");
       setTimeout(() => setGameState('dealer-turn'), 1000);
     }
   };
 
+  // ── Stand ─────────────────────────────────────────────────────────────────
   const stand = () => {
     if (gameState !== 'playing') return;
     setGameState('dealer-turn');
-    setMessage('Dealer\'s turn...');
+    setMessage("Dealer's turn…");
   };
 
-  // Dealer's turn logic
+  // ── Dealer turn ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (gameState !== 'dealer-turn') return;
-    
+
     const dealerPlay = async () => {
-      let currentDeck = [...deck];
+      let currentDeck       = [...deck];
       let currentDealerHand = [...dealerHand];
-      
-      // Dealer draws until 361 HP or higher
+
       while (calculateTotal(currentDealerHand) < 361 && currentDeck.length > 0) {
-        await new Promise(r => setTimeout(r, 500));
+        await sleep(500);
         playCardDeal();
         const card = currentDeck.pop()!;
         currentDealerHand = [...currentDealerHand, card];
@@ -258,19 +354,18 @@ function App() {
 
       const playerTotal = calculateTotal(playerHand);
       const dealerTotal = calculateTotal(currentDealerHand);
-
-      await new Promise(r => setTimeout(r, 800));
+      await sleep(800);
 
       const saveWin = async (hand: PokemonCard[], wonBet: number) => {
-        // Sequential to avoid rate-limiting the PokeAPI
         const sprites: string[] = [];
         for (const c of hand) {
           sprites.push(await fetchPokemonSprite(c.name));
+          await sleep(150);
         }
         const entry: HallOfFameEntry = {
-          id: `${Date.now()}`,
-          playerName,
-          bet: wonBet,
+          id:           `${Date.now()}`,
+          playerName:   currentUser,
+          bet:          wonBet,
           pokemonNames: hand.map(c => c.name),
           sprites,
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
@@ -284,33 +379,49 @@ function App() {
 
       if (dealerTotal > 400) {
         playWin();
-        setMessage('Dealer BUSTS! Over 400 HP! You WIN! 🎉');
+        setMessage('Dealer BUSTS! You WIN!');
         setChips(c => c + bet * 2);
         saveWin(playerHand, bet);
       } else if (playerTotal > dealerTotal) {
         playWin();
-        setMessage('You WIN! 🎉');
+        setMessage('You WIN!');
         setChips(c => c + bet * 2);
         saveWin(playerHand, bet);
       } else if (dealerTotal > playerTotal) {
         playLose();
-        setMessage('Dealer wins 😢');
+        setMessage('Dealer wins.');
       } else {
         setMessage('Push! Bet returned.');
         setChips(c => c + bet);
       }
-      
       setGameState('game-over');
     };
-    
+
     dealerPlay();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState]);
 
+  // ── New Round ─────────────────────────────────────────────────────────────
   const newRound = () => {
     if (chips <= 0) {
-      setChips(1000);
-      setMessage('Out of chips! Here\'s 1000 more. Place your bet!');
+      const users = loadUsers();
+      const userData = users[currentUser];
+      if (userData && canClaimBonus(userData.lastDailyBonus)) {
+        userData.chips = 100;
+        userData.lastDailyBonus = new Date().toISOString();
+        saveUsers(users);
+        setChips(100);
+        setMessage('Daily bonus collected! +$100 — Place your bet!');
+      } else {
+        const wait = userData ? bonusCountdown(userData.lastDailyBonus) : '24h';
+        setMessage(`No chips! Come back in ${wait} for your daily $100.`);
+        // Stay on game-over so the message is visible
+        setPlayerHand([]);
+        setDealerHand([]);
+        setBet(0);
+        setDisplayedPlayerTotal(0);
+        return;
+      }
     } else {
       setMessage('Place your bet!');
     }
@@ -321,49 +432,88 @@ function App() {
     setGameState('betting');
   };
 
-  if (gameState === 'loading') {
+  // ── Render: Auth ──────────────────────────────────────────────────────────
+  if (gameState === 'auth') {
     return (
       <div className="app">
-        <div className="loading-container">
-          <div className="loading-spinner" />
-          <p className="loading-text">{message}</p>
+        <div className="auth-container">
+          <div className="auth-panel">
+            <h1 className="auth-title">Pokémon <span>Blackjack</span></h1>
+            <p className="auth-subtitle">Sign in — or just type a new name to register</p>
+            <form className="auth-form" onSubmit={handleAuth}>
+              <div className="auth-field">
+                <label className="auth-label">Username</label>
+                <input
+                  className="auth-input"
+                  type="text"
+                  value={authUsername}
+                  onChange={e => { setAuthUsername(e.target.value); setAuthError(''); }}
+                  placeholder="trainer_name"
+                  autoComplete="username"
+                  autoFocus
+                />
+              </div>
+              <div className="auth-field">
+                <label className="auth-label">Password</label>
+                <input
+                  className="auth-input"
+                  type="password"
+                  value={authPassword}
+                  onChange={e => { setAuthPassword(e.target.value); setAuthError(''); }}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </div>
+              {authError && <p className="auth-error">{authError}</p>}
+              <button className="btn-primary btn-deal auth-submit" type="submit">
+                Play
+              </button>
+            </form>
+            <p className="auth-hint">No email needed. New accounts start with $1,000 and earn $100/day.</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  const dealerTotal = calculateTotal(dealerHand);
+  // ── Render: Loading ───────────────────────────────────────────────────────
+  if (gameState === 'loading') {
+    return (
+      <div className="app">
+        <div className="loading-container">
+          <div className="loading-spinner" />
+          <p className="loading-text">Fetching Pokémon cards…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: Game ──────────────────────────────────────────────────────────
+  const dealerTotal    = calculateTotal(dealerHand);
   const showDealerTotal = gameState !== 'betting' && gameState !== 'playing';
 
   return (
     <div className="app">
       <div className="game-container">
 
-        {/* Header */}
         <header className="header">
           <span className="header-title">Pokémon <span>Blackjack</span></span>
           <div className="header-chips">
             <span className="chips-label">Chips</span>
             <span className="chips-value">${chips.toLocaleString()}</span>
           </div>
-          <span className="player-tag">{playerName}</span>
+          <span className="player-tag">{currentUser}</span>
         </header>
 
-        {/* Dealer */}
         <div className="panel">
           <div className="panel-label">
             Dealer
-            <span className={`total-badge${showDealerTotal ? '' : ' hidden'}`}>
-              {dealerTotal} HP
-            </span>
+            <span className={`total-badge${showDealerTotal ? '' : ' hidden'}`}>{dealerTotal} HP</span>
           </div>
           <div className="hand">
             {dealerHand.map((card, idx) => (
-              <div
-                key={card.id + idx}
-                className="card"
-                style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}
-              >
+              <div key={card.id + idx} className="card"
+                style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
                 {gameState === 'playing' && idx === 1 ? (
                   <div className="card-back">
                     <img src="https://images.pokemontcg.io/base1/back.png" alt="card back" />
@@ -379,21 +529,15 @@ function App() {
           </div>
         </div>
 
-        {/* Player */}
         <div className="panel">
           <div className="panel-label">
             Your Hand
-            <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}`}>
-              {displayedPlayerTotal} HP
-            </span>
+            <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}`}>{displayedPlayerTotal} HP</span>
           </div>
           <div className="hand">
             {playerHand.map((card, idx) => (
-              <div
-                key={card.id + idx}
-                className="card"
-                style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
-              >
+              <div key={card.id + idx} className="card"
+                style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}>
                 <img src={card.images.small} alt={card.name} className="card-image" />
                 <span className="card-hp">{card.hp} HP</span>
               </div>
@@ -401,35 +545,29 @@ function App() {
           </div>
         </div>
 
-        {/* Message */}
         <div className="message-panel">
           <p className="message-text">{message}</p>
         </div>
 
-        {/* Controls */}
         <div className="controls-panel">
           {gameState === 'betting' && (
             <>
               <span className="bet-label">Place your bet</span>
               <div className="bet-row">
                 {[10, 25, 50, 100].map(amount => (
-                  <button
-                    key={amount}
-                    className="chip-btn"
-                    onClick={() => placeBet(amount)}
-                    disabled={bet + amount > chips}
-                  >
+                  <button key={amount} className="chip-btn"
+                    onClick={() => placeBet(amount)} disabled={bet + amount > chips}>
                     +${amount}
                   </button>
                 ))}
               </div>
               <div className="bet-summary">
                 <span className="bet-display">
-                  {bet > 0 ? <>Betting <strong>${bet}</strong></> : <span className="bet-empty">Select chips to bet</span>}
+                  {bet > 0
+                    ? <>Betting <strong>${bet}</strong></>
+                    : <span className="bet-empty">Select chips to bet</span>}
                 </span>
-                {bet > 0 && (
-                  <button className="clear-btn" onClick={clearBet}>Clear</button>
-                )}
+                {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
               </div>
               <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>
                 Deal
@@ -450,14 +588,13 @@ function App() {
 
           {gameState === 'game-over' && (
             <button className="btn-primary btn-new-round" onClick={newRound}>
-              New Round
+              {chips <= 0 ? 'Collect Daily Bonus' : 'New Round'}
             </button>
           )}
         </div>
 
         <p className="footer">{deck.length} cards remaining</p>
 
-        {/* Hall of Fame */}
         <div className="hof-panel">
           <div className="hof-header">
             <span className="hof-title">Hall of Fame</span>
@@ -477,17 +614,11 @@ function App() {
                     </div>
                   </div>
                   <div className="hof-team">
-                    {entry.sprites.map((src, j) => (
+                    {entry.sprites.map((src, j) =>
                       src
-                        ? <img
-                            key={j}
-                            src={src}
-                            alt=""
-                            title={entry.pokemonNames[j]}
-                            className="hof-sprite"
-                          />
-                        : <span key={j} className="hof-sprite-fallback" title={entry.pokemonNames[j]}>?</span>
-                    ))}
+                        ? <img key={j} src={src} alt="" title={entry.pokemonNames[j]} className="hof-sprite" />
+                        : null
+                    )}
                   </div>
                 </li>
               ))}
