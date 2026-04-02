@@ -42,29 +42,36 @@ function App() {
     const fetchCards = async () => {
       try {
         setMessage('Fetching Pokemon cards from TCG database...');
-        
-        // Fetch 250 unique cards (max allowed by API)
-        const response = await fetch(
-          'https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250'
-        );
-        const data = await response.json();
-        
-        // Filter cards that have HP and images
-        const validCards: PokemonCard[] = data.data
-          .filter((card: any) => card.hp && parseInt(card.hp) > 0 && card.images?.small)
-          .map((card: any) => ({
+
+        // Fetch cards from multiple pages to get diverse Pokemon
+        const fetchPage = (page: number) =>
+          fetch(
+            `https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250&page=${page}`
+          ).then(r => r.json());
+
+        const [page1, page2] = await Promise.all([fetchPage(1), fetchPage(2)]);
+        const rawCards = [...(page1.data ?? []), ...(page2.data ?? [])];
+
+        // Keep one card per Pokemon name (first encountered), require HP + image
+        const seenNames = new Set<string>();
+        const validCards: PokemonCard[] = [];
+        for (const card of rawCards) {
+          if (!card.hp || parseInt(card.hp) <= 0 || !card.images?.small) continue;
+          if (seenNames.has(card.name)) continue;
+          seenNames.add(card.name);
+          validCards.push({
             id: card.id,
             name: card.name,
             hp: parseInt(card.hp),
-            images: card.images
-          }));
-        
+            images: card.images,
+          });
+        }
+
         if (validCards.length < 20) {
           throw new Error('Not enough cards fetched');
         }
-        
+
         setAllCards(validCards);
-        // Use all unique cards - no duplicates
         setDeck(shuffleArray(validCards));
         setMessage('Place your bet to start!');
         setGameState('betting');
