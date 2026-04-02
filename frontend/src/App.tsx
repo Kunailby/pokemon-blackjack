@@ -200,8 +200,8 @@ function App() {
       let currentDeck = [...deck];
       let currentDealerHand = [...dealerHand];
       
-      // Dealer draws until 301 HP or higher
-      while (calculateTotal(currentDealerHand) < 301 && currentDeck.length > 0) {
+      // Dealer draws until 361 HP or higher
+      while (calculateTotal(currentDealerHand) < 361 && currentDeck.length > 0) {
         await new Promise(r => setTimeout(r, 500));
         playCardDeal();
         const card = currentDeck.pop()!;
