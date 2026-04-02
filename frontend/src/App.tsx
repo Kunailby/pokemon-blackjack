@@ -37,6 +37,7 @@ function App() {
   const [gameState, setGameState] = useState<GameState>('loading');
   const [message, setMessage] = useState('Loading Pokemon cards...');
   const [playerName] = useState('Trainer' + Math.floor(Math.random() * 1000));
+  const [displayedPlayerTotal, setDisplayedPlayerTotal] = useState(0);
 
   // Fetch cards from Pokemon TCG API on mount
   useEffect(() => {
@@ -140,6 +141,11 @@ function App() {
     setTimeout(() => playCardDeal(), 240);       // p2
     setTimeout(() => playCardDeal(), 360);       // d2
 
+    // Show player total only after the last player card finishes animating
+    // p2 has delay 0.24s + animation 0.38s = ~620ms
+    const initialTotal = calculateTotal([p1, p2]);
+    setTimeout(() => setDisplayedPlayerTotal(initialTotal), 650);
+
     setDeck(newDeck);
     setPlayerHand([p1, p2]);
     setDealerHand([d1, d2]);
@@ -166,7 +172,10 @@ function App() {
     setDeck(newDeck);
     setPlayerHand(newHand);
 
+    // Hit cards animate with 0s delay + 0.38s duration; update total after
     const total = calculateTotal(newHand);
+    setTimeout(() => setDisplayedPlayerTotal(total), 430);
+
     if (total > 400) {
       setTimeout(() => playBust(), 120);
       setMessage('BUST! Over 400 HP! 💥');
@@ -193,7 +202,7 @@ function App() {
       
       // Dealer draws until 301 HP or higher
       while (calculateTotal(currentDealerHand) < 301 && currentDeck.length > 0) {
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 500));
         playCardDeal();
         const card = currentDeck.pop()!;
         currentDealerHand = [...currentDealerHand, card];
@@ -239,6 +248,7 @@ function App() {
     setPlayerHand([]);
     setDealerHand([]);
     setBet(0);
+    setDisplayedPlayerTotal(0);
     setGameState('betting');
   };
 
@@ -291,13 +301,13 @@ function App() {
         
         {/* Player's Hand */}
         <div className="hand-section player-section">
-          <h3>Your Hand ({calculateTotal(playerHand)})</h3>
+          <h3>Your Hand ({displayedPlayerTotal || ''})</h3>
           <div className="hand">
             {playerHand.map((card, idx) => (
               <div
                 key={card.id + idx}
                 className="card"
-                style={{ '--deal-delay': `${idx * 0.24}s` } as React.CSSProperties}
+                style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
               >
                 <img src={card.images.small} alt={card.name} className="card-image" />
                 <div className="card-value">Value: {getCardValue(card)}</div>
