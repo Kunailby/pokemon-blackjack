@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import { playCardDeal, playShuffle, playWin, playLose, playBust } from './sounds';
 
 interface PokemonCard {
   id: string;
@@ -119,21 +120,32 @@ function App() {
       setMessage('Please place a bet first!');
       return;
     }
-    
-    let newDeck = deck.length < 10 ? shuffleArray([...allCards]) : [...deck];
-    
-    // Deal cards
+
+    const needsShuffle = deck.length < 10;
+    let newDeck = needsShuffle ? shuffleArray([...allCards]) : [...deck];
+
+    if (needsShuffle) {
+      playShuffle();
+    }
+
+    // Deal order: p1, d1, p2, d2 — interleaved like a real deal
     const p1 = newDeck.pop()!;
     const d1 = newDeck.pop()!;
     const p2 = newDeck.pop()!;
     const d2 = newDeck.pop()!;
-    
+
+    // Staggered deal sounds matching animation delays
+    playCardDeal();                              // p1 at 0ms
+    setTimeout(() => playCardDeal(), 120);       // d1
+    setTimeout(() => playCardDeal(), 240);       // p2
+    setTimeout(() => playCardDeal(), 360);       // d2
+
     setDeck(newDeck);
     setPlayerHand([p1, p2]);
     setDealerHand([d1, d2]);
     setChips(chips - bet);
     setGameState('playing');
-    
+
     // Check for blackjack (400 HP)
     const playerTotal = calculateTotal([p1, p2]);
     if (playerTotal === 400) {
@@ -146,15 +158,17 @@ function App() {
 
   const hit = () => {
     if (gameState !== 'playing') return;
-    
+
+    playCardDeal();
     const newDeck = [...deck];
     const card = newDeck.pop()!;
     const newHand = [...playerHand, card];
     setDeck(newDeck);
     setPlayerHand(newHand);
-    
+
     const total = calculateTotal(newHand);
     if (total > 400) {
+      setTimeout(() => playBust(), 120);
       setMessage('BUST! Over 400 HP! 💥');
       setGameState('game-over');
     } else if (total === 400) {
@@ -180,24 +194,28 @@ function App() {
       // Dealer draws until 301 HP or higher
       while (calculateTotal(currentDealerHand) < 301 && currentDeck.length > 0) {
         await new Promise(r => setTimeout(r, 1000));
+        playCardDeal();
         const card = currentDeck.pop()!;
         currentDealerHand = [...currentDealerHand, card];
         setDealerHand(currentDealerHand);
         setDeck(currentDeck);
       }
-      
+
       const playerTotal = calculateTotal(playerHand);
       const dealerTotal = calculateTotal(currentDealerHand);
-      
+
       await new Promise(r => setTimeout(r, 800));
-      
+
       if (dealerTotal > 400) {
+        playWin();
         setMessage('Dealer BUSTS! Over 400 HP! You WIN! 🎉');
         setChips(c => c + bet * 2);
       } else if (playerTotal > dealerTotal) {
+        playWin();
         setMessage('You WIN! 🎉');
         setChips(c => c + bet * 2);
       } else if (dealerTotal > playerTotal) {
+        playLose();
         setMessage('Dealer wins 😢');
       } else {
         setMessage('Push! Bet returned.');
@@ -251,7 +269,11 @@ function App() {
           <h3>Dealer {gameState !== 'betting' && `(${gameState === 'playing' ? '?' : calculateTotal(dealerHand)})`}</h3>
           <div className="hand">
             {dealerHand.map((card, idx) => (
-              <div key={card.id + idx} className="card">
+              <div
+                key={card.id + idx}
+                className="card"
+                style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}
+              >
                 {gameState === 'playing' && idx === 1 ? (
                   <div className="card-back">
                     <img src="https://images.pokemontcg.io/base1/back.png" alt="card back" />
@@ -272,7 +294,11 @@ function App() {
           <h3>Your Hand ({calculateTotal(playerHand)})</h3>
           <div className="hand">
             {playerHand.map((card, idx) => (
-              <div key={card.id + idx} className="card">
+              <div
+                key={card.id + idx}
+                className="card"
+                style={{ '--deal-delay': `${idx * 0.24}s` } as React.CSSProperties}
+              >
                 <img src={card.images.small} alt={card.name} className="card-image" />
                 <div className="card-value">Value: {getCardValue(card)}</div>
               </div>

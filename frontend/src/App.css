@@ -98,6 +98,26 @@ h1 {
   align-items: center;
 }
 
+@keyframes card-deal {
+  0% {
+    transform: translateY(-240px) rotateZ(-10deg) scale(0.65);
+    opacity: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  65% {
+    transform: translateY(10px) rotateZ(1.5deg) scale(1.04);
+    opacity: 1;
+  }
+  82% {
+    transform: translateY(-4px) rotateZ(-0.5deg) scale(0.99);
+  }
+  100% {
+    transform: translateY(0) rotateZ(0deg) scale(1);
+    opacity: 1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+}
+
 .card {
   background: #222;
   border-radius: 8px;
@@ -107,11 +127,13 @@ h1 {
   flex-direction: column;
   align-items: center;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  transition: transform 0.2s;
+  animation: card-deal 0.38s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: var(--deal-delay, 0s);
 }
 
 .card:hover {
   transform: translateY(-8px) scale(1.05);
+  transition: transform 0.18s ease;
 }
 
 .card-image {
