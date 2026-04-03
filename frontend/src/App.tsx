@@ -114,12 +114,20 @@ async function tryFetchSprite(slug: string): Promise<string> {
 async function fetchPokemonSprite(cardName: string): Promise<string> {
   const names = await getAllPokemonNames();
 
-  // Strategy 1 (preferred): scan all sub-phrases of the card name and find
-  // one that exactly matches a known Pokémon slug.
-  // e.g. "Team Aqua's Kyogre ex" → tokens ["Team","Aqua's","Kyogre","ex"]
-  //   → tries "kyogre" → hit!
+  // Pre-normalize: strip hyphenated TCG suffixes so "Entei-EX" → "Entei",
+  // "M Sceptile-EX" → "M Sceptile", "Vileplume-GX" → "Vileplume"
+  const normalized = cardName
+    .replace(/-(ex|GX|VMAX|VSTAR|VUNION|BREAK)$/i, '')
+    .replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|VUNION|BREAK|LV\.X|δ|\d+)(\s|$)/gi, ' ')
+    .replace(/^(Team\s+\w+'s|\w+'s|Dark|Light|Gym|M\s)\s*/i, '')
+    .trim();
+
+  // Strategy 1 (preferred): scan all sub-phrases of the normalized name and
+  // find one that exactly matches a known Pokémon slug.
+  // e.g. "Team Aqua's Kyogre ex" → normalized "Kyogre" → slug "kyogre" → hit!
+  // e.g. "Entei-EX" → normalized "Entei" → slug "entei" → hit!
   if (names.size > 0) {
-    const tokens = cardName.trim().split(/\s+/);
+    const tokens = normalized.split(/\s+/);
     for (let len = Math.min(tokens.length, 3); len >= 1; len--) {
       for (let start = 0; start <= tokens.length - len; start++) {
         const slug = toSlug(tokens.slice(start, start + len).join(' '));
@@ -131,12 +139,8 @@ async function fetchPokemonSprite(cardName: string): Promise<string> {
     }
   }
 
-  // Strategy 2 (fallback): strip known TCG suffixes/prefixes with regex
-  const base = cardName
-    .replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|VUNION|BREAK|LV\.X|δ|\d+)(\s|$)/gi, ' ')
-    .replace(/^(Team\s+\w+'s|\w+'s|Dark|Light|Gym|M\s)\s*/i, '')
-    .trim();
-  for (const slug of [toSlug(base.split(' ')[0]), toSlug(base)]) {
+  // Strategy 2 (fallback): try first word and full normalized name as slugs
+  for (const slug of [toSlug(normalized.split(' ')[0]), toSlug(normalized)]) {
     const sprite = await tryFetchSprite(slug);
     if (sprite) return sprite;
   }
@@ -230,6 +234,29 @@ function App() {
     };
     refetch();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Re-fetch missing sprites for Dex entries ──────────────────────────────
+  useEffect(() => {
+    if (!currentUser || dex.length === 0) return;
+    if (dex.every(d => d.sprite)) return; // all sprites present, nothing to do
+    const refetch = async () => {
+      const updated = dex.map(d => ({ ...d }));
+      let changed = false;
+      for (let i = 0; i < updated.length; i++) {
+        if (!updated[i].sprite) {
+          const sprite = await fetchPokemonSprite(updated[i].name);
+          await sleep(150);
+          if (sprite) { updated[i].sprite = sprite; changed = true; }
+        }
+      }
+      if (changed) {
+        setDex(updated);
+        const u = loadUsers();
+        if (u[currentUser]) { u[currentUser].dex = updated; saveUsers(u); }
+      }
+    };
+    refetch();
+  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   const handleAuth = (e: React.FormEvent) => {
@@ -661,9 +688,11 @@ function App() {
         </div>
 
         {/* Message */}
-        <div className="message-panel">
-          <p className="message-text">{message}</p>
-        </div>
+        {message && (
+          <div className="message-panel">
+            <p className="message-text">{message}</p>
+          </div>
+        )}
 
         {/* Controls */}
         <div className="controls-panel">
