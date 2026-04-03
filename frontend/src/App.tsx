@@ -160,6 +160,7 @@ function App() {
     catch { return []; }
   });
   const [personalHof, setPersonalHof] = useState<HallOfFameEntry[]>([]);
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
 
   // ── Persist chips on change ───────────────────────────────────────────────
   useEffect(() => {
@@ -451,6 +452,20 @@ function App() {
     });
   };
 
+  // ── Logout ────────────────────────────────────────────────────────────────
+  const logout = () => {
+    setCurrentUser('');
+    setChips(1000);
+    setDex([]);
+    setPersonalHof([]);
+    setBet(0);
+    setPlayerHand([]);
+    setDealerHand([]);
+    setMessage('');
+    setDisplayedPlayerTotal(0);
+    setLogoutConfirm(false);
+    setGameState('auth');
+  };
   // ── New Round ─────────────────────────────────────────────────────────────
   const newRound = () => {
     if (chips <= 0) {
@@ -552,6 +567,20 @@ function App() {
           <div className="header-right">
             <span className="chips-value">${chips.toLocaleString()}</span>
             <span className="player-tag">{currentUser}</span>
+            <div className="logout-wrap">
+              <button
+                className="logout-btn"
+                title="Log out"
+                onClick={() => setLogoutConfirm(v => !v)}
+              >⏻</button>
+              {logoutConfirm && (
+                <div className="logout-popover">
+                  <span>Log out?</span>
+                  <button className="logout-confirm" onClick={logout}>Yes</button>
+                  <button className="logout-cancel" onClick={() => setLogoutConfirm(false)}>No</button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
