@@ -78,7 +78,7 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 async function fetchPokemonSprite(cardName: string): Promise<string> {
   const base = cardName
     .replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|VUNION|BREAK|LV\.X|δ|\d+)(\s|$)/gi, ' ')
-    .replace(/^(Dark|Light|Team Rocket's|Rocket's|Gym|M\s)\s*/i, '')
+    .replace(/^(Team\s+\w+'s|\w+'s|Dark|Light|Gym|M\s)\s*/i, '')
     .trim();
 
   const toSlug = (s: string) =>
@@ -593,7 +593,7 @@ function App() {
                 <div
                   key={card.id + idx}
                   className={`card${isDexPending ? ' dex-eligible' : ''}`}
-                  onClick={() => isDexPending && addToDex(card)}
+                  onClick={() => { if (isDexPending) { addToDex(card); setGameState('game-over'); } }}
                   style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
                 >
                   <img src={card.images.small} alt={card.name} className="card-image" />
