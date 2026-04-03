@@ -10,6 +10,7 @@
 [build.environment]
   NODE_OPTIONS = "--openssl-legacy-provider"
   NPM_FLAGS = "--legacy-peer-deps"
+  DISABLE_ESLINT_PLUGIN = "true"
 
 [dev]
   command = "npm start"

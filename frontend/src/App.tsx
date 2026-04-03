@@ -40,6 +40,18 @@ function shuffleArray<T>(array: T[]): T[] {
   return arr;
 }
 
+// Build a 312-card shoe (6 decks) from a pool of unique cards.
+// Each copy gets a unique id suffix so React keys never collide.
+function buildShoe(cards: PokemonCard[]): PokemonCard[] {
+  const SHOE_SIZE = 312;
+  const shoe: PokemonCard[] = [];
+  for (let i = 0; i < SHOE_SIZE; i++) {
+    const card = cards[i % cards.length];
+    shoe.push({ ...card, id: `${card.id}-s${i}` });
+  }
+  return shuffleArray(shoe);
+}
+
 function hashPassword(password: string): string {
   let hash = 5381;
   for (let i = 0; i < password.length; i++) {
@@ -351,10 +363,10 @@ function App() {
         }
         if (valid.length < 20) throw new Error('Too few cards');
         setAllCards(valid);
-        setDeck(shuffleArray(valid));
+        setDeck(buildShoe(valid));
       } catch {
         setAllCards(FALLBACK_CARDS);
-        setDeck(shuffleArray(FALLBACK_CARDS));
+        setDeck(buildShoe(FALLBACK_CARDS));
       }
       setMessage(loginBonusRef.current || 'Place your bet!');
       loginBonusRef.current = '';
@@ -376,7 +388,7 @@ function App() {
     isDexEligibleRef.current = bet >= chips * 0.1;
 
     const needsShuffle = deck.length < 15;
-    const newDeck = needsShuffle ? shuffleArray([...allCards]) : [...deck];
+    const newDeck = needsShuffle ? buildShoe(allCards) : [...deck];
     if (needsShuffle) playShuffle();
 
     const p1 = newDeck.pop()!;
