@@ -745,7 +745,7 @@ function App() {
 
           {gameState === 'game-over' && (
             <button className="btn-primary btn-new-round" onClick={newRound}>
-              {chips <= 0 ? 'Collect Daily Bonus' : 'New Round'}
+              New Round
             </button>
           )}
         </div>
