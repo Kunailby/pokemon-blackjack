@@ -75,34 +75,70 @@ function bonusCountdown(last: string): string {
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
+// Cache of all official Pokémon slugs from PokéAPI (e.g. "kyogre", "mr-mime")
+let allPokemonNames: Set<string> | undefined;
+
+async function getAllPokemonNames(): Promise<Set<string>> {
+  if (allPokemonNames) return allPokemonNames;
+  try {
+    const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=2000');
+    const data = await res.json();
+    allPokemonNames = new Set(
+      (data.results ?? []).map((p: any) => p.name as string)
+    );
+  } catch {
+    allPokemonNames = new Set(); // fallback to empty — regex path takes over
+  }
+  return allPokemonNames;
+}
+
+const toSlug = (s: string) =>
+  s.toLowerCase()
+    .replace(/♀/g, '-f').replace(/♂/g, '-m')
+    .replace(/['.]/g, '')
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-|-$/g, '');
+
+async function tryFetchSprite(slug: string): Promise<string> {
+  if (!slug) return '';
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${slug}`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.sprites?.front_default ?? '';
+    }
+  } catch { /* ignore */ }
+  return '';
+}
+
 async function fetchPokemonSprite(cardName: string): Promise<string> {
+  const names = await getAllPokemonNames();
+
+  // Strategy 1 (preferred): scan all sub-phrases of the card name and find
+  // one that exactly matches a known Pokémon slug.
+  // e.g. "Team Aqua's Kyogre ex" → tokens ["Team","Aqua's","Kyogre","ex"]
+  //   → tries "kyogre" → hit!
+  if (names.size > 0) {
+    const tokens = cardName.trim().split(/\s+/);
+    for (let len = Math.min(tokens.length, 3); len >= 1; len--) {
+      for (let start = 0; start <= tokens.length - len; start++) {
+        const slug = toSlug(tokens.slice(start, start + len).join(' '));
+        if (slug && names.has(slug)) {
+          const sprite = await tryFetchSprite(slug);
+          if (sprite) return sprite;
+        }
+      }
+    }
+  }
+
+  // Strategy 2 (fallback): strip known TCG suffixes/prefixes with regex
   const base = cardName
     .replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|VUNION|BREAK|LV\.X|δ|\d+)(\s|$)/gi, ' ')
     .replace(/^(Team\s+\w+'s|\w+'s|Dark|Light|Gym|M\s)\s*/i, '')
     .trim();
-
-  const toSlug = (s: string) =>
-    s.toLowerCase()
-      .replace(/♀/g, '-f').replace(/♂/g, '-m')
-      .replace(/['.]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-
-  const attempts = [
-    toSlug(base.split(' ')[0]),
-    toSlug(base),
-    toSlug(cardName.split(' ')[0]),
-    toSlug(cardName),
-  ].filter((v, i, a) => Boolean(v) && a.indexOf(v) === i);
-
-  for (const name of attempts) {
-    try {
-      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.sprites?.front_default) return data.sprites.front_default;
-      }
-    } catch { /* try next */ }
+  for (const slug of [toSlug(base.split(' ')[0]), toSlug(base)]) {
+    const sprite = await tryFetchSprite(slug);
+    if (sprite) return sprite;
   }
   return '';
 }
@@ -241,6 +277,8 @@ function App() {
   useEffect(() => {
     if (gameState !== 'loading') return;
     const fetchCards = async () => {
+      // Warm up the Pokémon name cache in parallel with card fetching
+      getAllPokemonNames();
       try {
         const fetchPage = (p: number) =>
           fetch(`https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250&page=${p}`).then(r => r.json());
@@ -295,7 +333,7 @@ function App() {
     // Record dex eligibility: bet must be ≥ 10% of chips BEFORE deduction
     isDexEligibleRef.current = bet >= chips * 0.1;
 
-    const needsShuffle = deck.length < 10;
+    const needsShuffle = deck.length < 15;
     const newDeck = needsShuffle ? shuffleArray([...allCards]) : [...deck];
     if (needsShuffle) playShuffle();
 
@@ -303,16 +341,18 @@ function App() {
     const d1 = newDeck.pop()!;
     const p2 = newDeck.pop()!;
     const d2 = newDeck.pop()!;
+    const d3 = newDeck.pop()!; // face-down
 
     playCardDeal();
     setTimeout(() => playCardDeal(), 120);
     setTimeout(() => playCardDeal(), 240);
     setTimeout(() => playCardDeal(), 360);
-    setTimeout(() => setDisplayedPlayerTotal(calculateTotal([p1, p2])), 650);
+    setTimeout(() => playCardDeal(), 480);
+    setTimeout(() => setDisplayedPlayerTotal(calculateTotal([p1, p2])), 750);
 
     setDeck(newDeck);
     setPlayerHand([p1, p2]);
-    setDealerHand([d1, d2]);
+    setDealerHand([d1, d2, d3]);
     setChips(c => c - bet);
     setPendingDexCards([]);
     setGameState('playing');
@@ -321,7 +361,7 @@ function App() {
       setMessage('BLACKJACK! 400 HP!');
       setTimeout(() => setGameState('dealer-turn'), 1000);
     } else {
-      setMessage('Hit or Stand?');
+      setMessage('');
     }
   };
 
@@ -580,7 +620,7 @@ function App() {
             {dealerHand.map((card, idx) => (
               <div key={card.id + idx} className="card"
                 style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
-                {gameState === 'playing' && idx === 1 ? (
+                {gameState === 'playing' && idx === 2 ? (
                   <div className="card-back">
                     <div className="card-back-ball" />
                   </div>
