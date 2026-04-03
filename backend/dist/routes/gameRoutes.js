@@ -5,12 +5,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const gameController_1 = require("../controllers/gameController");
-const auth_1 = require("../middleware/auth");
 const router = express_1.default.Router();
-router.post('/create', auth_1.authMiddleware, gameController_1.createGameTable);
-router.post('/join', auth_1.authMiddleware, gameController_1.joinGameTable);
-router.get('/available', auth_1.authMiddleware, gameController_1.listAvailableGames);
-router.get('/:tableId', auth_1.authMiddleware, gameController_1.getGameTable);
-router.post('/:tableId/start', auth_1.authMiddleware, gameController_1.startGame);
+// No auth required - username passed in body
+router.post('/create', gameController_1.createGameTable);
+router.post('/join', gameController_1.joinGameTable);
+router.get('/available', gameController_1.listAvailableGames);
+router.get('/:tableId', gameController_1.getGameTable);
+router.post('/:tableId/start', gameController_1.startGame);
 exports.default = router;
 //# sourceMappingURL=gameRoutes.js.map

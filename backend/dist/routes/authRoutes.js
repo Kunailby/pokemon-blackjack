@@ -7,8 +7,10 @@ const express_1 = __importDefault(require("express"));
 const authController_1 = require("../controllers/authController");
 const auth_1 = require("../middleware/auth");
 const router = express_1.default.Router();
-router.post('/register', authController_1.register);
 router.post('/login', authController_1.login);
 router.get('/profile', auth_1.authMiddleware, authController_1.getProfile);
+router.put('/sync', auth_1.authMiddleware, authController_1.syncGameData);
+router.get('/hof', authController_1.getGlobalHoF);
+router.post('/hof', auth_1.authMiddleware, authController_1.addToGlobalHoF);
 exports.default = router;
 //# sourceMappingURL=authRoutes.js.map

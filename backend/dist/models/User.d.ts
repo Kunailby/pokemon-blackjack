@@ -1,9 +1,11 @@
 import mongoose, { Document } from 'mongoose';
 export interface IUser extends Document {
     username: string;
-    email: string;
-    password: string;
+    passwordHash: string;
     chips: number;
+    lastDailyBonus: string;
+    personalHof: any;
+    dex: any;
     totalGamesPlayed: number;
     totalWins: number;
     totalLosses: number;

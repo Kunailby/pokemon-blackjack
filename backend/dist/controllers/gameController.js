@@ -6,21 +6,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.startGame = exports.listAvailableGames = exports.getGameTable = exports.joinGameTable = exports.createGameTable = void 0;
 const GameTable_1 = __importDefault(require("../models/GameTable"));
 const ShoeService_1 = require("../services/ShoeService");
+const generateUserId = () => 'user_' + Math.random().toString(36).substring(2, 15);
 const createGameTable = async (req, res) => {
     try {
-        if (!req.userId) {
-            return res.status(401).json({ error: 'Not authenticated' });
-        }
+        const { username, oderId } = req.body;
+        const oderId_final = oderId || generateUserId();
+        const username_final = username || 'Player' + Math.floor(Math.random() * 1000);
         const inviteCode = (0, ShoeService_1.generateInviteCode)();
         // Create shoe
         const shoe = await (0, ShoeService_1.createShoe)(inviteCode);
         // Create game table
         const gameTable = new GameTable_1.default({
             inviteCode,
-            dealerId: req.userId,
+            dealerId: oderId_final,
             players: [{
-                    userId: req.userId,
-                    username: req.username || 'Player',
+                    userId: oderId_final,
+                    username: username_final,
                     hand: [],
                     totalHP: 0,
                     isStanding: false,
@@ -48,10 +49,9 @@ const createGameTable = async (req, res) => {
 exports.createGameTable = createGameTable;
 const joinGameTable = async (req, res) => {
     try {
-        if (!req.userId) {
-            return res.status(401).json({ error: 'Not authenticated' });
-        }
-        const { inviteCode } = req.body;
+        const { inviteCode, username, oderId } = req.body;
+        const oderId_final = oderId || generateUserId();
+        const username_final = username || 'Player' + Math.floor(Math.random() * 1000);
         if (!inviteCode) {
             return res.status(400).json({ error: 'Invite code required' });
         }
@@ -61,7 +61,7 @@ const joinGameTable = async (req, res) => {
             return res.status(404).json({ error: 'Game not found' });
         }
         // Check if player already in game
-        if (gameTable.players.some(p => p.userId === req.userId)) {
+        if (gameTable.players.some(p => p.userId === oderId_final)) {
             return res.status(409).json({ error: 'Already in this game' });
         }
         // Check max players
@@ -70,8 +70,8 @@ const joinGameTable = async (req, res) => {
         }
         // Add player
         gameTable.players.push({
-            userId: req.userId,
-            username: req.username || 'Player',
+            userId: oderId_final,
+            username: username_final,
             hand: [],
             totalHP: 0,
             isStanding: false,
@@ -136,12 +136,13 @@ exports.listAvailableGames = listAvailableGames;
 const startGame = async (req, res) => {
     try {
         const { tableId } = req.params;
+        const { oderId } = req.body;
         const gameTable = await GameTable_1.default.findById(tableId);
         if (!gameTable) {
             return res.status(404).json({ error: 'Game not found' });
         }
         // Only dealer can start
-        if (gameTable.dealerId !== req.userId) {
+        if (oderId && gameTable.dealerId !== oderId) {
             return res.status(403).json({ error: 'Only dealer can start game' });
         }
         // Need at least 2 players

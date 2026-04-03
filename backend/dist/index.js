@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const socket_io_1 = require("socket.io");
 const http_1 = __importDefault(require("http"));
@@ -22,6 +23,10 @@ const io = new socket_io_1.Server(server, {
     }
 });
 // Middleware
+app.use((0, cors_1.default)({
+    origin: ['https://pkmbkj.netlify.app', 'http://localhost:3000'],
+    credentials: true
+}));
 app.use(express_1.default.json());
 // MongoDB Connection
 const connectDB = async () => {

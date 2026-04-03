@@ -34,17 +34,9 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const UserSchema = new mongoose_1.Schema({
-    username: { type: String, required: true, unique: true },
-    passwordHash: { type: String, default: '' },
-    chips: { type: Number, default: 1000 },
-    lastDailyBonus: { type: String, default: '' },
-    personalHof: mongoose_1.Schema.Types.Mixed,
-    dex: mongoose_1.Schema.Types.Mixed,
-    totalGamesPlayed: { type: Number, default: 0 },
-    totalWins: { type: Number, default: 0 },
-    totalLosses: { type: Number, default: 0 },
-    createdAt: { type: Date, default: Date.now },
+// Singleton document — one record holds the global top-10 HoF entries
+const GlobalHoFSchema = new mongoose_1.Schema({
+    entries: mongoose_1.Schema.Types.Mixed,
 });
-exports.default = mongoose_1.default.model('User', UserSchema);
-//# sourceMappingURL=User.js.map
+exports.default = mongoose_1.default.model('GlobalHoF', GlobalHoFSchema);
+//# sourceMappingURL=GlobalHoF.js.map
