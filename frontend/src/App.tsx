@@ -201,6 +201,20 @@ function App() {
   });
   const [personalHof, setPersonalHof] = useState<HallOfFameEntry[]>([]);
 
+  // ── Restore session on refresh ───────────────────────────────────────────
+  useEffect(() => {
+    const saved = localStorage.getItem('pkmbkj-session');
+    if (!saved) return;
+    const users = loadUsers();
+    const userData = users[saved];
+    if (!userData) { localStorage.removeItem('pkmbkj-session'); return; }
+    setCurrentUser(saved);
+    setChips(userData.chips);
+    setPersonalHof(userData.personalHof ?? []);
+    setDex(userData.dex ?? []);
+    setGameState('loading');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Persist chips on change ───────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
@@ -293,6 +307,7 @@ function App() {
     }
 
     saveUsers(users);
+    localStorage.setItem('pkmbkj-session', username);
     loginBonusRef.current = bonusMsg;
     setCurrentUser(username);
     setChips(startChips);
