@@ -821,11 +821,36 @@ function App() {
               </>
             )}
 
-            {gameState === 'game-over' && (
-              <button className="btn-primary btn-new-round" onClick={newRound}>
-                New Round
-              </button>
-            )}
+            {gameState === 'game-over' && (() => {
+              if (chips <= 0) {
+                const users = loadUsers();
+                const last  = users[currentUser]?.lastDailyBonus ?? '';
+                const ready = canClaimBonus(last);
+                return (
+                  <div className="broke-screen">
+                    <p className="broke-icon">💸</p>
+                    <p className="broke-title">You're out of chips!</p>
+                    {ready ? (
+                      <>
+                        <p className="broke-subtitle">Your daily bonus is ready.</p>
+                        <button className="btn-primary broke-btn" onClick={collectBonus}>
+                          Collect $100
+                        </button>
+                      </>
+                    ) : (
+                      <p className="broke-subtitle">
+                        Daily bonus in <strong>{bonusCountdown(last)}</strong>
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <button className="btn-primary btn-new-round" onClick={newRound}>
+                  New Round
+                </button>
+              );
+            })()}
           </div>
 
         </>}
