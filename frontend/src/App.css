@@ -1,3 +1,20 @@
+/* ─── Broke screen ───────────────────────────────────────────────────────────── */
+.broke-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  flex: 1;
+}
+.broke-icon  { font-size: 3rem; line-height: 1; margin: 0; }
+.broke-title { font-size: 1.3rem; font-weight: 700; color: var(--accent); margin: 0; }
+.broke-subtitle { font-size: 1rem; color: rgba(255,255,255,0.65); margin: 0; }
+.broke-subtitle strong { color: var(--gold); }
+.broke-btn { margin-top: 8px; }
+
 /* ─── Page layout (HoF / Dex pages) ─────────────────────────────────────────── */
 .page-container {
   width: 100%;

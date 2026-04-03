@@ -70,6 +70,22 @@ function saveUsers(users: UserStore): void {
   localStorage.setItem('pkmbkj-users', JSON.stringify(users));
 }
 
+// ── Card cache (6-hour TTL) ───────────────────────────────────────────────────
+function loadCardCache(): PokemonCard[] | null {
+  try {
+    const raw = localStorage.getItem('pkmbkj-cards');
+    if (!raw) return null;
+    const { cards, fetchedAt } = JSON.parse(raw);
+    if (Date.now() - fetchedAt > 6 * 60 * 60 * 1000) return null; // stale
+    return cards as PokemonCard[];
+  } catch { return null; }
+}
+
+function saveCardCache(cards: PokemonCard[]): void {
+  try { localStorage.setItem('pkmbkj-cards', JSON.stringify({ cards, fetchedAt: Date.now() })); }
+  catch { /* quota exceeded — skip */ }
+}
+
 const BONUS_MS = 24 * 60 * 60 * 1000;
 
 function canClaimBonus(last: string): boolean {
@@ -331,8 +347,20 @@ function App() {
   useEffect(() => {
     if (gameState !== 'loading') return;
     const fetchCards = async () => {
-      // Warm up the Pokémon name cache in parallel with card fetching
+      // Warm up the Pokémon name cache in parallel
       getAllPokemonNames();
+
+      // Use cached cards if fresh (skips API call on refresh)
+      const cached = loadCardCache();
+      if (cached && cached.length >= 20) {
+        setAllCards(cached);
+        setDeck(buildShoe(cached));
+        setMessage(loginBonusRef.current || 'Place your bet!');
+        loginBonusRef.current = '';
+        setGameState('betting');
+        return;
+      }
+
       try {
         const fetchPage = (p: number) =>
           fetch(`https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250&page=${p}`).then(r => r.json());
@@ -362,6 +390,7 @@ function App() {
           valid.push({ id: c.id, name: c.name, hp: parseInt(c.hp), images: c.images });
         }
         if (valid.length < 20) throw new Error('Too few cards');
+        saveCardCache(valid);
         setAllCards(valid);
         setDeck(buildShoe(valid));
       } catch {
@@ -560,28 +589,22 @@ function App() {
     });
   };
 
+  // ── Collect daily bonus (from broke screen) ──────────────────────────────
+  const collectBonus = () => {
+    const users = loadUsers();
+    if (!users[currentUser] || !canClaimBonus(users[currentUser].lastDailyBonus)) return;
+    users[currentUser].chips = 100;
+    users[currentUser].lastDailyBonus = new Date().toISOString();
+    saveUsers(users);
+    setChips(100);
+    setMessage('Daily bonus collected! +$100 — Place your bet!');
+  };
+
   // ── New Round ─────────────────────────────────────────────────────────────
   const newRound = () => {
-    if (chips <= 0) {
-      const users    = loadUsers();
-      const userData = users[currentUser];
-      if (userData && canClaimBonus(userData.lastDailyBonus)) {
-        userData.chips = 100;
-        userData.lastDailyBonus = new Date().toISOString();
-        saveUsers(users);
-        setChips(100);
-        setMessage('Daily bonus collected! +$100 — Place your bet!');
-      } else {
-        const wait = userData ? bonusCountdown(userData.lastDailyBonus) : '24h';
-        setMessage(`No chips! Come back in ${wait} for your daily $100.`);
-        setPlayerHand([]); setDealerHand([]); setBet(0); setDisplayedPlayerTotal(0);
-        return;
-      }
-    } else {
-      setMessage('Place your bet!');
-    }
     setPlayerHand([]); setDealerHand([]); setBet(0); setDisplayedPlayerTotal(0);
     setPendingDexCards([]);
+    setMessage(chips <= 0 ? '' : 'Place your bet!');
     setGameState('betting');
   };
 
@@ -664,118 +687,148 @@ function App() {
           </div>
         </header>
 
-        {/* Dealer */}
-        <div className="panel">
-          <div className="panel-label">
-            Dealer
-            <span className={`total-badge${showDealerTotal ? '' : ' hidden'}`}>{dealerTotal} HP</span>
+        {/* Broke screen */}
+        {chips <= 0 && gameState === 'betting' && (() => {
+          const users = loadUsers();
+          const last  = users[currentUser]?.lastDailyBonus ?? '';
+          const ready = canClaimBonus(last);
+          return (
+            <div className="broke-screen">
+              <p className="broke-icon">💸</p>
+              <p className="broke-title">You're out of chips!</p>
+              {ready ? (
+                <>
+                  <p className="broke-subtitle">Your daily bonus is ready.</p>
+                  <button className="btn-primary broke-btn" onClick={collectBonus}>
+                    Collect $100
+                  </button>
+                </>
+              ) : (
+                <p className="broke-subtitle">
+                  Daily bonus in <strong>{bonusCountdown(last)}</strong>
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Play area — hidden when broke at betting screen */}
+        {(chips > 0 || gameState !== 'betting') && <>
+
+          {/* Dealer */}
+          <div className="panel">
+            <div className="panel-label">
+              Dealer
+              <span className={`total-badge${showDealerTotal ? '' : ' hidden'}`}>{dealerTotal} HP</span>
+            </div>
+            <div className="hand">
+              {dealerHand.map((card, idx) => (
+                <div key={card.id + idx} className="card"
+                  style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
+                  {gameState === 'playing' && idx === 2 ? (
+                    <div className="card-back">
+                      <div className="card-back-ball" />
+                    </div>
+                  ) : (
+                    <>
+                      <img src={card.images.small} alt={card.name} className="card-image" />
+                      <span className="card-hp">{card.hp} HP</span>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="hand">
-            {dealerHand.map((card, idx) => (
-              <div key={card.id + idx} className="card"
-                style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
-                {gameState === 'playing' && idx === 2 ? (
-                  <div className="card-back">
-                    <div className="card-back-ball" />
-                  </div>
-                ) : (
-                  <>
+
+          {/* Player */}
+          <div className="panel">
+            <div className="panel-label">
+              Your Hand
+              <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}`}>{displayedPlayerTotal} HP</span>
+            </div>
+            <div className="hand">
+              {playerHand.map((card, idx) => {
+                const isDexPending = gameState === 'dex-select' && pendingDexCards.some(c => c.name === card.name);
+                return (
+                  <div
+                    key={card.id + idx}
+                    className={`card${isDexPending ? ' dex-eligible' : ''}`}
+                    onClick={() => { if (isDexPending) { addToDex(card); setGameState('game-over'); } }}
+                    style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
+                  >
                     <img src={card.images.small} alt={card.name} className="card-image" />
                     <span className="card-hp">{card.hp} HP</span>
-                  </>
-                )}
-              </div>
-            ))}
+                    {isDexPending && <span className="dex-capture-badge">+ DEX</span>}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        {/* Player */}
-        <div className="panel">
-          <div className="panel-label">
-            Your Hand
-            <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}`}>{displayedPlayerTotal} HP</span>
-          </div>
-          <div className="hand">
-            {playerHand.map((card, idx) => {
-              const isDexPending = gameState === 'dex-select' && pendingDexCards.some(c => c.name === card.name);
-              return (
-                <div
-                  key={card.id + idx}
-                  className={`card${isDexPending ? ' dex-eligible' : ''}`}
-                  onClick={() => { if (isDexPending) { addToDex(card); setGameState('game-over'); } }}
-                  style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
-                >
-                  <img src={card.images.small} alt={card.name} className="card-image" />
-                  <span className="card-hp">{card.hp} HP</span>
-                  {isDexPending && <span className="dex-capture-badge">+ DEX</span>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Message */}
-        {message && (
-          <div className="message-panel">
-            <p className="message-text">{message}</p>
-          </div>
-        )}
-
-        {/* Controls */}
-        <div className="controls-panel">
-          {gameState === 'betting' && (
-            <>
-              <span className="bet-label">Place your bet</span>
-              <div className="bet-row">
-                {[10, 25, 50, 100].map(amount => (
-                  <button key={amount} className="chip-btn"
-                    onClick={() => placeBet(amount)} disabled={bet + amount > chips}>
-                    +${amount}
-                  </button>
-                ))}
-              </div>
-              <div className="bet-summary">
-                <span className="bet-display">
-                  {bet > 0
-                    ? <>Betting <strong>${bet}</strong>{bet >= chips * 0.1 ? <span className="dex-hint"> · 🎴 Dex eligible</span> : ''}</>
-                    : <span className="bet-empty">Select chips to bet</span>}
-                </span>
-                {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
-              </div>
-              <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>
-                Deal
-              </button>
-            </>
-          )}
-
-          {gameState === 'playing' && (
-            <div className="play-buttons">
-              <button className="btn-primary btn-hit" onClick={hit}>Hit</button>
-              <button className="btn-primary btn-stand" onClick={stand}>Stand</button>
+          {/* Message */}
+          {message && (
+            <div className="message-panel">
+              <p className="message-text">{message}</p>
             </div>
           )}
 
-          {gameState === 'dealer-turn' && (
-            <p className="bet-display">Dealer is playing…</p>
-          )}
+          {/* Controls */}
+          <div className="controls-panel">
+            {gameState === 'betting' && (
+              <>
+                <span className="bet-label">Place your bet</span>
+                <div className="bet-row">
+                  {[10, 25, 50, 100].map(amount => (
+                    <button key={amount} className="chip-btn"
+                      onClick={() => placeBet(amount)} disabled={bet + amount > chips}>
+                      +${amount}
+                    </button>
+                  ))}
+                </div>
+                <div className="bet-summary">
+                  <span className="bet-display">
+                    {bet > 0
+                      ? <>Betting <strong>${bet}</strong>{bet >= chips * 0.1 ? <span className="dex-hint"> · 🎴 Dex eligible</span> : ''}</>
+                      : <span className="bet-empty">Select chips to bet</span>}
+                  </span>
+                  {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
+                </div>
+                <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>
+                  Deal
+                </button>
+              </>
+            )}
 
-          {gameState === 'dex-select' && (
-            <>
-              <p className="dex-select-prompt">
-                Tap a <span className="dex-select-highlight">glowing card</span> to add it to your Pokédex!
-              </p>
-              <button className="btn-primary btn-new-round" onClick={() => setGameState('game-over')}>
-                Done
+            {gameState === 'playing' && (
+              <div className="play-buttons">
+                <button className="btn-primary btn-hit" onClick={hit}>Hit</button>
+                <button className="btn-primary btn-stand" onClick={stand}>Stand</button>
+              </div>
+            )}
+
+            {gameState === 'dealer-turn' && (
+              <p className="bet-display">Dealer is playing…</p>
+            )}
+
+            {gameState === 'dex-select' && (
+              <>
+                <p className="dex-select-prompt">
+                  Tap a <span className="dex-select-highlight">glowing card</span> to add it to your Pokédex!
+                </p>
+                <button className="btn-primary btn-new-round" onClick={() => setGameState('game-over')}>
+                  Done
+                </button>
+              </>
+            )}
+
+            {gameState === 'game-over' && (
+              <button className="btn-primary btn-new-round" onClick={newRound}>
+                New Round
               </button>
-            </>
-          )}
+            )}
+          </div>
 
-          {gameState === 'game-over' && (
-            <button className="btn-primary btn-new-round" onClick={newRound}>
-              New Round
-            </button>
-          )}
-        </div>
+        </>}
 
         <p className="footer">{deck.length} cards remaining</p>
 
