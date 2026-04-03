@@ -1,3 +1,20 @@
+/* ─── Dex capture fly animation ─────────────────────────────────────────────── */
+.flying-dex-card {
+  position: fixed;
+  width: 72px;
+  pointer-events: none;
+  border-radius: 8px;
+  z-index: 9999;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  transform: translate(-50%, -50%);
+  animation: fly-to-dex 0.55s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+}
+@keyframes fly-to-dex {
+  0%   { transform: translate(-50%, -50%) scale(1);    opacity: 1; }
+  60%  { opacity: 1; }
+  100% { transform: translate(calc(var(--dx) - 50%), calc(var(--dy) - 50%)) scale(0.08); opacity: 0; }
+}
+
 /* ─── Broke screen ───────────────────────────────────────────────────────────── */
 .broke-screen {
   display: flex;

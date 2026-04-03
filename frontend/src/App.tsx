@@ -86,6 +86,23 @@ function saveCardCache(cards: PokemonCard[]): void {
   catch { /* quota exceeded — skip */ }
 }
 
+// ── Backend API helper ────────────────────────────────────────────────────────
+const API_BASE = 'https://pokemon-blackjack-28yc.onrender.com/api';
+
+async function apiCall(path: string, method = 'GET', body?: any, token?: string): Promise<any> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, {
+    method, headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 const BONUS_MS = 24 * 60 * 60 * 1000;
 
 function canClaimBonus(last: string): boolean {
@@ -205,7 +222,10 @@ function App() {
   const [authUsername, setAuthUsername] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError]       = useState('');
-  const loginBonusRef = useRef('');
+  const [authLoading, setAuthLoading]   = useState(false);
+  const loginBonusRef  = useRef('');
+  const tokenRef       = useRef('');   // JWT, kept out of state to avoid re-renders
+  const syncTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Game
   const [allCards, setAllCards]     = useState<PokemonCard[]>([]);
@@ -213,6 +233,7 @@ function App() {
   const [playerHand, setPlayerHand] = useState<PokemonCard[]>([]);
   const [dealerHand, setDealerHand] = useState<PokemonCard[]>([]);
   const [chips, setChips]           = useState(1000);
+  const [lastDailyBonus, setLastDailyBonus] = useState('');
   const [bet, setBet]               = useState(0);
   const [message, setMessage]       = useState('');
   const [displayedPlayerTotal, setDisplayedPlayerTotal] = useState(0);
@@ -221,37 +242,85 @@ function App() {
   const [dex, setDex]                       = useState<DexEntry[]>([]);
   const [pendingDexCards, setPendingDexCards] = useState<PokemonCard[]>([]);
   const isDexEligibleRef = useRef(false);
+  const dexBtnRef        = useRef<HTMLButtonElement>(null);
+  const [flyingCard, setFlyingCard] = useState<{src: string; fromX: number; fromY: number; toX: number; toY: number} | null>(null);
 
   // Hall of Fame
-  const [hallOfFame, setHallOfFame]     = useState<HallOfFameEntry[]>(() => {
-    try { return JSON.parse(localStorage.getItem('pkmbkj-hof') ?? '[]'); }
-    catch { return []; }
-  });
+  const [hallOfFame, setHallOfFame]   = useState<HallOfFameEntry[]>([]);
   const [personalHof, setPersonalHof] = useState<HallOfFameEntry[]>([]);
 
   // ── Restore session on refresh ───────────────────────────────────────────
   useEffect(() => {
-    const saved = localStorage.getItem('pkmbkj-session');
-    if (!saved) return;
-    const users = loadUsers();
-    const userData = users[saved];
-    if (!userData) { localStorage.removeItem('pkmbkj-session'); return; }
-    setCurrentUser(saved);
-    setChips(userData.chips);
-    setPersonalHof(userData.personalHof ?? []);
-    setDex(userData.dex ?? []);
-    setGameState('loading');
+    const token   = localStorage.getItem('pkmbkj-token');
+    const session = localStorage.getItem('pkmbkj-session');
+    if (!session) return;
+
+    // Try backend first; fall back to localStorage
+    const restore = async () => {
+      if (token) {
+        try {
+          const data = await apiCall('/auth/profile', 'GET', undefined, token);
+          tokenRef.current = token;
+          setCurrentUser(session);
+          setChips(data.user.chips);
+          setLastDailyBonus(data.user.lastDailyBonus ?? '');
+          setPersonalHof(data.user.personalHof ?? []);
+          setDex(data.user.dex ?? []);
+          setGameState('loading');
+          return;
+        } catch { /* fall through to localStorage */ }
+      }
+      // Fallback: localStorage
+      const users = loadUsers();
+      const ud    = users[session];
+      if (!ud) { localStorage.removeItem('pkmbkj-session'); return; }
+      setCurrentUser(session);
+      setChips(ud.chips);
+      setLastDailyBonus(ud.lastDailyBonus ?? '');
+      setPersonalHof(ud.personalHof ?? []);
+      setDex(ud.dex ?? []);
+      setGameState('loading');
+    };
+    restore();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Persist chips on change ───────────────────────────────────────────────
+  // ── Fetch global HoF on mount ─────────────────────────────────────────────
+  useEffect(() => {
+    apiCall('/auth/hof').then(data => {
+      if (data.entries?.length) setHallOfFame(data.entries);
+      else {
+        // Fallback to localStorage cache
+        try { const cached = JSON.parse(localStorage.getItem('pkmbkj-hof') ?? '[]'); setHallOfFame(cached); }
+        catch { /* ignore */ }
+      }
+    }).catch(() => {
+      try { const cached = JSON.parse(localStorage.getItem('pkmbkj-hof') ?? '[]'); setHallOfFame(cached); }
+      catch { /* ignore */ }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Debounced backend sync ────────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
+    // Always update localStorage as a backup
     const users = loadUsers();
     if (users[currentUser]) {
-      users[currentUser].chips = chips;
+      users[currentUser].chips          = chips;
+      users[currentUser].lastDailyBonus = lastDailyBonus;
+      users[currentUser].personalHof    = personalHof;
+      users[currentUser].dex            = dex;
       saveUsers(users);
     }
-  }, [chips, currentUser]);
+    // Debounce backend sync
+    if (!tokenRef.current) return;
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      apiCall('/auth/sync', 'PUT',
+        { chips, lastDailyBonus, personalHof, dex },
+        tokenRef.current
+      ).catch(() => { /* silent — localStorage is the fallback */ });
+    }, 2000);
+  }, [chips, lastDailyBonus, dex, personalHof, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Re-fetch missing sprites for HoF entries on mount ────────────────────
   useEffect(() => {
@@ -301,45 +370,88 @@ function App() {
   }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auth ──────────────────────────────────────────────────────────────────
-  const handleAuth = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     const username = authUsername.trim();
     const password = authPassword;
     if (!username || !password) { setAuthError('Please enter a username and password.'); return; }
+    setAuthLoading(true);
 
-    const users = loadUsers();
-    const hash  = hashPassword(password);
-    let startChips = 1000;
-    let bonusMsg   = '';
+    const hash = hashPassword(password);
+    let startChips    = 1000;
+    let startLastBonus = '';
+    let startPersonal: HallOfFameEntry[] = [];
+    let startDex: DexEntry[] = [];
+    let bonusMsg = '';
 
-    if (users[username]) {
-      if (users[username].passwordHash !== hash) { setAuthError('Incorrect password.'); return; }
-      startChips = users[username].chips;
-      if (canClaimBonus(users[username].lastDailyBonus)) {
-        startChips += 100;
-        users[username].chips = startChips;
-        users[username].lastDailyBonus = new Date().toISOString();
-        bonusMsg = '🎁 Daily bonus — +$100!';
+    try {
+      // Try backend (with 6s timeout)
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6000);
+      const data = await apiCall('/auth/login', 'POST', { username, passwordHash: hash });
+      clearTimeout(timer);
+
+      tokenRef.current = data.token;
+      localStorage.setItem('pkmbkj-token', data.token);
+
+      startChips     = data.user.chips;
+      startLastBonus = data.user.lastDailyBonus ?? '';
+      startPersonal  = data.user.personalHof ?? [];
+      startDex       = data.user.dex ?? [];
+
+      if (data.isNew) {
+        bonusMsg = '👋 Welcome! You start with $1,000.';
+      } else if (canClaimBonus(startLastBonus)) {
+        startChips     += 100;
+        startLastBonus  = new Date().toISOString();
+        bonusMsg        = '🎁 Daily bonus — +$100!';
+        // Persist the bonus claim immediately
+        apiCall('/auth/sync', 'PUT',
+          { chips: startChips, lastDailyBonus: startLastBonus, personalHof: startPersonal, dex: startDex },
+          tokenRef.current
+        ).catch(() => {});
       }
-      setPersonalHof(users[username].personalHof ?? []);
-      setDex(users[username].dex ?? []);
-    } else {
-      users[username] = {
-        passwordHash: hash,
-        chips: 1000,
-        lastDailyBonus: new Date().toISOString(),
-        personalHof: [],
-        dex: [],
-      };
-      bonusMsg = '👋 Welcome! You start with $1,000.';
+    } catch (err: any) {
+      // Incorrect password comes back as an API error
+      if (err.message === 'Incorrect password.') {
+        setAuthError('Incorrect password.');
+        setAuthLoading(false);
+        return;
+      }
+      // Network error — fall back to localStorage
+      const users = loadUsers();
+      if (users[username]) {
+        if (users[username].passwordHash !== hash) { setAuthError('Incorrect password.'); setAuthLoading(false); return; }
+        startChips     = users[username].chips;
+        startLastBonus = users[username].lastDailyBonus ?? '';
+        startPersonal  = users[username].personalHof ?? [];
+        startDex       = users[username].dex ?? [];
+        if (canClaimBonus(startLastBonus)) {
+          startChips    += 100;
+          startLastBonus = new Date().toISOString();
+          bonusMsg       = '🎁 Daily bonus — +$100!';
+        }
+      } else {
+        users[username] = { passwordHash: hash, chips: 1000, lastDailyBonus: new Date().toISOString(), personalHof: [], dex: [] };
+        bonusMsg = '👋 Welcome! You start with $1,000.';
+      }
+      saveUsers(users);
     }
 
+    // Persist to localStorage as backup
+    const users = loadUsers();
+    users[username] = { ...(users[username] || {}), passwordHash: hash, chips: startChips, lastDailyBonus: startLastBonus, personalHof: startPersonal, dex: startDex };
     saveUsers(users);
+
     localStorage.setItem('pkmbkj-session', username);
     loginBonusRef.current = bonusMsg;
     setCurrentUser(username);
     setChips(startChips);
+    setLastDailyBonus(startLastBonus);
+    setPersonalHof(startPersonal);
+    setDex(startDex);
     setAuthError('');
+    setAuthLoading(false);
     setGameState('loading');
   };
 
@@ -509,19 +621,27 @@ function App() {
           sprites,
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         };
-        // Global (top 10)
-        setHallOfFame(prev => {
-          const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10);
-          localStorage.setItem('pkmbkj-hof', JSON.stringify(updated));
-          return updated;
-        });
-        // Personal (top 10)
-        setPersonalHof(prev => {
-          const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10);
-          const users = loadUsers();
-          if (users[currentUser]) { users[currentUser].personalHof = updated; saveUsers(users); }
-          return updated;
-        });
+        // Global HoF — push to backend; update local state from response
+        if (tokenRef.current) {
+          apiCall('/auth/hof', 'POST', { entry }, tokenRef.current)
+            .then(data => setHallOfFame(data.entries || []))
+            .catch(() => {
+              // Backend unavailable — update locally
+              setHallOfFame(prev => {
+                const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10);
+                localStorage.setItem('pkmbkj-hof', JSON.stringify(updated));
+                return updated;
+              });
+            });
+        } else {
+          setHallOfFame(prev => {
+            const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10);
+            localStorage.setItem('pkmbkj-hof', JSON.stringify(updated));
+            return updated;
+          });
+        }
+        // Personal HoF (via state → triggers sync effect)
+        setPersonalHof(prev => [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10));
       };
 
       const isWin = dealerTotal > 400 || playerTotal > dealerTotal;
@@ -591,12 +711,10 @@ function App() {
 
   // ── Collect daily bonus (from broke screen) ──────────────────────────────
   const collectBonus = () => {
-    const users = loadUsers();
-    if (!users[currentUser] || !canClaimBonus(users[currentUser].lastDailyBonus)) return;
-    users[currentUser].chips = 100;
-    users[currentUser].lastDailyBonus = new Date().toISOString();
-    saveUsers(users);
+    if (!canClaimBonus(lastDailyBonus)) return;
+    const newBonus = new Date().toISOString();
     setChips(100);
+    setLastDailyBonus(newBonus);
     setMessage('Daily bonus collected! +$100 — Place your bet!');
   };
 
@@ -630,7 +748,9 @@ function App() {
                   placeholder="••••••••" autoComplete="current-password" />
               </div>
               {authError && <p className="auth-error">{authError}</p>}
-              <button className="btn-primary btn-deal auth-submit" type="submit">Play</button>
+              <button className="btn-primary btn-deal auth-submit" type="submit" disabled={authLoading}>
+                {authLoading ? 'Signing in…' : 'Play'}
+              </button>
             </form>
             <p className="auth-hint">No email needed · New accounts start with $1,000 · $100 daily bonus</p>
           </div>
@@ -667,6 +787,22 @@ function App() {
 
   return (
     <div className="app">
+      {/* Flying dex card animation */}
+      {flyingCard && (
+        <img
+          className="flying-dex-card"
+          src={flyingCard.src}
+          alt=""
+          style={{
+            left: flyingCard.fromX,
+            top:  flyingCard.fromY,
+            '--dx': `${flyingCard.toX - flyingCard.fromX}px`,
+            '--dy': `${flyingCard.toY - flyingCard.fromY}px`,
+          } as React.CSSProperties}
+          onAnimationEnd={() => setFlyingCard(null)}
+        />
+      )}
+
       <div className="game-container">
 
         {/* Header */}
@@ -676,7 +812,7 @@ function App() {
             <button className="nav-icon-btn" onClick={() => setPage('hof')} title="Hall of Fame">
               🏆
             </button>
-            <button className="nav-icon-btn" onClick={() => setPage('dex')} title="My Pokédex">
+            <button ref={dexBtnRef} className="nav-icon-btn" onClick={() => setPage('dex')} title="My Pokédex">
               📖
               {dex.length > 0 && <span className="nav-badge">{dex.length}</span>}
             </button>
@@ -688,29 +824,20 @@ function App() {
         </header>
 
         {/* Broke screen */}
-        {chips <= 0 && gameState === 'betting' && (() => {
-          const users = loadUsers();
-          const last  = users[currentUser]?.lastDailyBonus ?? '';
-          const ready = canClaimBonus(last);
-          return (
-            <div className="broke-screen">
-              <p className="broke-icon">💸</p>
-              <p className="broke-title">You're out of chips!</p>
-              {ready ? (
-                <>
-                  <p className="broke-subtitle">Your daily bonus is ready.</p>
-                  <button className="btn-primary broke-btn" onClick={collectBonus}>
-                    Collect $100
-                  </button>
-                </>
-              ) : (
-                <p className="broke-subtitle">
-                  Daily bonus in <strong>{bonusCountdown(last)}</strong>
-                </p>
-              )}
-            </div>
-          );
-        })()}
+        {chips <= 0 && gameState === 'betting' && (
+          <div className="broke-screen">
+            <p className="broke-icon">💸</p>
+            <p className="broke-title">You're out of chips!</p>
+            {canClaimBonus(lastDailyBonus) ? (
+              <>
+                <p className="broke-subtitle">Your daily bonus is ready.</p>
+                <button className="btn-primary broke-btn" onClick={collectBonus}>Collect $100</button>
+              </>
+            ) : (
+              <p className="broke-subtitle">Daily bonus in <strong>{bonusCountdown(lastDailyBonus)}</strong></p>
+            )}
+          </div>
+        )}
 
         {/* Play area — hidden when broke at betting screen */}
         {(chips > 0 || gameState !== 'betting') && <>
@@ -753,7 +880,22 @@ function App() {
                   <div
                     key={card.id + idx}
                     className={`card${isDexPending ? ' dex-eligible' : ''}`}
-                    onClick={() => { if (isDexPending) { addToDex(card); setGameState('game-over'); } }}
+                    onClick={(e) => {
+                      if (!isDexPending) return;
+                      const cardRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      const dexRect  = dexBtnRef.current?.getBoundingClientRect();
+                      if (dexRect) {
+                        setFlyingCard({
+                          src:   card.images.small,
+                          fromX: cardRect.left + cardRect.width  / 2,
+                          fromY: cardRect.top  + cardRect.height / 2,
+                          toX:   dexRect.left  + dexRect.width   / 2,
+                          toY:   dexRect.top   + dexRect.height  / 2,
+                        });
+                      }
+                      addToDex(card);
+                      setGameState('game-over');
+                    }}
                     style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
                   >
                     <img src={card.images.small} alt={card.name} className="card-image" />
@@ -823,24 +965,17 @@ function App() {
 
             {gameState === 'game-over' && (() => {
               if (chips <= 0) {
-                const users = loadUsers();
-                const last  = users[currentUser]?.lastDailyBonus ?? '';
-                const ready = canClaimBonus(last);
                 return (
                   <div className="broke-screen">
                     <p className="broke-icon">💸</p>
                     <p className="broke-title">You're out of chips!</p>
-                    {ready ? (
+                    {canClaimBonus(lastDailyBonus) ? (
                       <>
                         <p className="broke-subtitle">Your daily bonus is ready.</p>
-                        <button className="btn-primary broke-btn" onClick={collectBonus}>
-                          Collect $100
-                        </button>
+                        <button className="btn-primary broke-btn" onClick={collectBonus}>Collect $100</button>
                       </>
                     ) : (
-                      <p className="broke-subtitle">
-                        Daily bonus in <strong>{bonusCountdown(last)}</strong>
-                      </p>
+                      <p className="broke-subtitle">Daily bonus in <strong>{bonusCountdown(lastDailyBonus)}</strong></p>
                     )}
                   </div>
                 );

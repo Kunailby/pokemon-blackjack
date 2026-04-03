@@ -22,7 +22,7 @@ const io = new Server(server, {
 
 // Middleware
 app.use(cors({
-  origin: 'https://pkmbkj.netlify.app',
+  origin: ['https://pkmbkj.netlify.app', 'http://localhost:3000'],
   credentials: true
 }));
 app.use(express.json());
