@@ -244,8 +244,23 @@ function App() {
       try {
         const fetchPage = (p: number) =>
           fetch(`https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250&page=${p}`).then(r => r.json());
-        const [p1, p2] = await Promise.all([fetchPage(1), fetchPage(2)]);
-        const raw = [...(p1.data ?? []), ...(p2.data ?? [])];
+
+        // Fetch page 1 to discover total card count
+        const p1 = await fetchPage(1);
+        const totalCount: number = p1.totalCount ?? 1000;
+        const maxPage = Math.max(2, Math.ceil(totalCount / 250));
+
+        // Pick 4 additional pages spread randomly across the full catalog
+        const picks = new Set<number>([1]);
+        const segment = Math.floor(maxPage / 4);
+        for (let i = 0; i < 4; i++) {
+          const base = i * segment + 2;
+          picks.add(Math.min(maxPage, base + Math.floor(Math.random() * Math.max(1, segment))));
+        }
+        picks.delete(1); // already have p1
+
+        const extras = await Promise.all(Array.from(picks).map(p => fetchPage(p)));
+        const raw: any[] = (p1.data ?? []).concat(...extras.map((r: any) => r.data ?? []));
         const seen = new Set<string>();
         const valid: PokemonCard[] = [];
         for (const c of raw) {
@@ -567,7 +582,7 @@ function App() {
                 style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
                 {gameState === 'playing' && idx === 1 ? (
                   <div className="card-back">
-                    <img src="https://images.pokemontcg.io/base1/back.png" alt="card back" />
+                    <div className="card-back-ball" />
                   </div>
                 ) : (
                   <>

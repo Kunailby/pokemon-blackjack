@@ -598,11 +598,31 @@ body::after {
   border: 1px solid var(--glass-border);
 }
 
-.card-back img {
-  width: 100%;
-  height: auto;
-  border-radius: 12px;
-  opacity: 0.9;
+.card-back-ball {
+  width: 60%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: linear-gradient(
+    to bottom,
+    #e53935 0%, #e53935 46%,
+    #111 46%, #111 54%,
+    #fff 54%, #fff 100%
+  );
+  border: 2px solid rgba(255,255,255,0.15);
+  box-shadow: 0 0 16px rgba(229,57,53,0.3), inset 0 0 8px rgba(0,0,0,0.4);
+  position: relative;
+}
+.card-back-ball::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 28%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #222;
+  border: 2px solid rgba(255,255,255,0.25);
+  box-shadow: 0 0 6px rgba(255,255,255,0.2);
 }
 
 .card-hp {
