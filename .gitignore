@@ -1,0 +1,8 @@
+node_modules/
+frontend/build/
+backend/dist/
+*.env
+.env
+.env.local
+frontend/package-lock.json
+backend/package-lock.json
