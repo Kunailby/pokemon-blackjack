@@ -643,6 +643,18 @@ body::after {
   opacity: 0;
 }
 
+.panel-label .total-badge.caution {
+  color: var(--gold);
+  background: rgba(245, 200, 66, 0.15);
+  border-color: rgba(245, 200, 66, 0.3);
+}
+
+.panel-label .total-badge.danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: rgba(240, 112, 112, 0.3);
+}
+
 /* ─── Hand / Cards ──────────────────────────────────────────────────────────── */
 .hand {
   display: flex;
@@ -739,7 +751,7 @@ body::after {
   bottom: 6px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 0.7rem;
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: #fff;
@@ -1102,6 +1114,7 @@ body::after {
   .controls-panel { padding: 18px 16px; }
 
   .card { width: 90px; }
+  .card-hp { font-size: 0.85rem; }
 
   .play-buttons { gap: 10px; }
   .btn-primary { padding: 12px 28px; font-size: 0.82rem; }

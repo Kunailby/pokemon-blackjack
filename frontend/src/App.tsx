@@ -574,10 +574,10 @@ function App() {
     setTimeout(() => setDisplayedPlayerTotal(total), 430);
     if (total > 400) {
       setTimeout(() => playBust(), 120);
-      setMessage('BUST! Over 400 HP!');
+      setMessage(`Overkill! You busted at ${total} HP!`);
       setGameState('game-over');
     } else if (total === 400) {
-      setMessage("400 HP! Dealer's turn…");
+      setMessage("Perfect 400! Dealer steps up…");
       setTimeout(() => setGameState('dealer-turn'), 1000);
     }
   };
@@ -597,7 +597,7 @@ function App() {
       let currentDeck       = [...deck];
       let currentDealerHand = [...dealerHand];
 
-      while (calculateTotal(currentDealerHand) < 361 && currentDeck.length > 0) {
+      while (calculateTotal(currentDealerHand) <= 300 && currentDeck.length > 0) {
         await sleep(500);
         playCardDeal();
         const card = currentDeck.pop()!;
@@ -645,21 +645,29 @@ function App() {
         setPersonalHof(prev => [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10));
       };
 
+      // Guard: player already busted before dealer turn (shouldn't normally happen)
+      if (playerTotal > 400) {
+        playLose();
+        setMessage(`Overkill! You busted at ${playerTotal} HP!`);
+        setGameState('game-over');
+        return;
+      }
+
       const isWin = dealerTotal > 400 || playerTotal > dealerTotal;
 
       if (dealerTotal > 400) {
         playWin();
-        setMessage('Dealer BUSTS! You WIN!');
+        setMessage("Dealer's overmatched! You WIN by bust!");
         setChips(c => c + bet * 2);
       } else if (playerTotal > dealerTotal) {
         playWin();
-        setMessage('You WIN!');
+        setMessage('Champion! You claimed the prize!');
         setChips(c => c + bet * 2);
       } else if (dealerTotal > playerTotal) {
         playLose();
-        setMessage('Dealer wins.');
+        setMessage("The dealer's hand prevails. Better luck next round!");
       } else {
-        setMessage('Push! Bet returned.');
+        setMessage('Standoff! Your chips are safe.');
         setChips(c => c + bet);
       }
 
@@ -714,9 +722,9 @@ function App() {
   const collectBonus = () => {
     if (!canClaimBonus(lastDailyBonus)) return;
     const newBonus = new Date().toISOString();
-    setChips(100);
+    setChips(c => c + 100);
     setLastDailyBonus(newBonus);
-    setMessage('Daily bonus collected! +$100 — Place your bet!');
+    setMessage('Daily bonus collected! +$100 — Choose your wager!');
   };
 
   // ── Logout ────────────────────────────────────────────────────────────────
@@ -803,7 +811,7 @@ function App() {
 
   // ── Render: Game ──────────────────────────────────────────────────────────
   const dealerTotal     = calculateTotal(dealerHand);
-  const showDealerTotal = gameState !== 'betting' && gameState !== 'playing';
+  const showDealerTotal = gameState !== 'betting';
 
   return (
     <div className="app">
@@ -861,7 +869,7 @@ function App() {
         {chips <= 0 && gameState === 'betting' && (
           <div className="broke-screen">
             <p className="broke-icon">💸</p>
-            <p className="broke-title">You're out of chips!</p>
+            <p className="broke-title">Bankrupt!</p>
             {canClaimBonus(lastDailyBonus) ? (
               <>
                 <p className="broke-subtitle">Your daily bonus is ready.</p>
@@ -905,7 +913,7 @@ function App() {
           <div className="panel">
             <div className="panel-label">
               Your Hand
-              <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}`}>{displayedPlayerTotal} HP</span>
+              <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}${displayedPlayerTotal >= 381 ? ' danger' : displayedPlayerTotal >= 320 ? ' caution' : ''}`}>{displayedPlayerTotal} HP</span>
             </div>
             <div className="hand">
               {playerHand.map((card, idx) => {
@@ -952,7 +960,7 @@ function App() {
           <div className="controls-panel">
             {gameState === 'betting' && (
               <>
-                <span className="bet-label">Place your bet</span>
+                <span className="bet-label">Choose your wager</span>
                 <div className="bet-row">
                   {[10, 25, 50, 100].map(amount => (
                     <button key={amount} className="chip-btn"
@@ -965,7 +973,7 @@ function App() {
                   <span className="bet-display">
                     {bet > 0
                       ? <>Betting <strong>${bet}</strong>{bet >= chips * 0.1 ? <span className="dex-hint"> · 🎴 Dex eligible</span> : ''}</>
-                      : <span className="bet-empty">Select chips to bet</span>}
+                      : <span className="bet-empty">Pick your stake</span>}
                   </span>
                   {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
                 </div>
@@ -992,7 +1000,7 @@ function App() {
                   Tap a <span className="dex-select-highlight">glowing card</span> to add it to your Pokédex!
                 </p>
                 <button className="btn-primary btn-new-round" onClick={() => setGameState('game-over')}>
-                  Done
+                  Confirm Roster
                 </button>
               </>
             )}
@@ -1002,7 +1010,7 @@ function App() {
                 return (
                   <div className="broke-screen">
                     <p className="broke-icon">💸</p>
-                    <p className="broke-title">You're out of chips!</p>
+                    <p className="broke-title">Bankrupt!</p>
                     {canClaimBonus(lastDailyBonus) ? (
                       <>
                         <p className="broke-subtitle">Your daily bonus is ready.</p>

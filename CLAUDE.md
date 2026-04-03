@@ -11,8 +11,11 @@ Pokemon Blackjack is a card game that combines Blackjack mechanics with Pokemon 
 **Core Rules:**
 - Target HP: **400** (equivalent to Blackjack's 21)
 - Bust threshold: **> 400 HP**
-- Dealer stands at: **301+ HP**
-- Win payout: **2x bet**
+- Dealer stands at: **301+ HP** (hits while HP ≤ 300)
+- Win payout: **2x bet** (all wins, including blackjack — no 3:2 distinction)
+- Push (tie): **Equal HP** → bet returned, no chip change
+- Blackjack: **exactly 400 HP on the initial 2-card deal only** — hitting to 400 is a regular win, not blackjack
+- Simultaneous bust: player busts before dealer turn, so dealer bust during dealer-turn always means player wins
 
 **Current state:** The frontend is a fully client-side single-player React app. The backend (Express + MongoDB) contains an older multiplayer architecture that is not actively used by the frontend.
 

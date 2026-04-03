@@ -6,7 +6,7 @@
  */
 
 export const HP_GOAL = 400; // Blackjack
-export const DEALER_STAND_HP = 300;
+export const DEALER_HIT_THRESHOLD = 300; // Dealer hits while HP <= 300, stands at 301+
 
 /**
  * Calculate total HP from cards
@@ -85,5 +85,5 @@ export const determineOutcome = (playerHP: number, dealerHP: number): GameResult
  * Determine if dealer should hit
  */
 export const shouldDealerHit = (dealerHP: number): boolean => {
-  return dealerHP < DEALER_STAND_HP;
+  return dealerHP <= DEALER_HIT_THRESHOLD;
 };
