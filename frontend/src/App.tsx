@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { playCardDeal, playShuffle, playWin, playLose, playBust } from './sounds';
+import HofPage, { HallOfFameEntry } from './HofPage';
+import DexPage, { DexEntry } from './DexPage';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -11,23 +13,17 @@ interface PokemonCard {
   images: { small: string; large: string };
 }
 
-interface HallOfFameEntry {
-  id: string;
-  playerName: string;
-  bet: number;
-  pokemonNames: string[];
-  sprites: string[];
-  date: string;
-}
-
 interface UserData {
   passwordHash: string;
   chips: number;
-  lastDailyBonus: string; // ISO timestamp
+  lastDailyBonus: string;
+  personalHof: HallOfFameEntry[];
+  dex: DexEntry[];
 }
 
 type UserStore = Record<string, UserData>;
-type GameState = 'auth' | 'loading' | 'betting' | 'playing' | 'dealer-turn' | 'game-over';
+type GameState = 'auth' | 'loading' | 'betting' | 'playing' | 'dealer-turn' | 'dex-select' | 'game-over';
+type Page = 'game' | 'hof' | 'dex';
 
 // ── Pure utilities ────────────────────────────────────────────────────────────
 
@@ -62,15 +58,15 @@ function saveUsers(users: UserStore): void {
   localStorage.setItem('pkmbkj-users', JSON.stringify(users));
 }
 
-const BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const BONUS_MS = 24 * 60 * 60 * 1000;
 
-function canClaimBonus(lastDailyBonus: string): boolean {
-  if (!lastDailyBonus) return true;
-  return Date.now() - new Date(lastDailyBonus).getTime() >= BONUS_INTERVAL_MS;
+function canClaimBonus(last: string): boolean {
+  if (!last) return true;
+  return Date.now() - new Date(last).getTime() >= BONUS_MS;
 }
 
-function bonusCountdown(lastDailyBonus: string): string {
-  const next = new Date(lastDailyBonus).getTime() + BONUS_INTERVAL_MS;
+function bonusCountdown(last: string): string {
+  const next = new Date(last).getTime() + BONUS_MS;
   const diff = Math.max(0, next - Date.now());
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
@@ -111,8 +107,6 @@ async function fetchPokemonSprite(cardName: string): Promise<string> {
   return '';
 }
 
-// ── Fallback deck ─────────────────────────────────────────────────────────────
-
 const FALLBACK_CARDS: PokemonCard[] = [
   { id: 'base1-4',  name: 'Charizard',  hp: 120, images: { small: 'https://images.pokemontcg.io/base1/4.png',  large: 'https://images.pokemontcg.io/base1/4_hires.png'  }},
   { id: 'base1-2',  name: 'Blastoise',  hp: 100, images: { small: 'https://images.pokemontcg.io/base1/2.png',  large: 'https://images.pokemontcg.io/base1/2_hires.png'  }},
@@ -134,31 +128,40 @@ const FALLBACK_CARDS: PokemonCard[] = [
 // ── Component ─────────────────────────────────────────────────────────────────
 
 function App() {
-  // Auth state
-  const [gameState, setGameState]     = useState<GameState>('auth');
-  const [currentUser, setCurrentUser] = useState('');
+  // Navigation
+  const [page, setPage] = useState<Page>('game');
+
+  // Auth
+  const [gameState, setGameState]       = useState<GameState>('auth');
+  const [currentUser, setCurrentUser]   = useState('');
   const [authUsername, setAuthUsername] = useState('');
   const [authPassword, setAuthPassword] = useState('');
-  const [authError, setAuthError]     = useState('');
-  const loginBonusRef = useRef(''); // message shown after loading completes
+  const [authError, setAuthError]       = useState('');
+  const loginBonusRef = useRef('');
 
-  // Game state
-  const [allCards, setAllCards]   = useState<PokemonCard[]>([]);
-  const [deck, setDeck]           = useState<PokemonCard[]>([]);
+  // Game
+  const [allCards, setAllCards]     = useState<PokemonCard[]>([]);
+  const [deck, setDeck]             = useState<PokemonCard[]>([]);
   const [playerHand, setPlayerHand] = useState<PokemonCard[]>([]);
   const [dealerHand, setDealerHand] = useState<PokemonCard[]>([]);
-  const [chips, setChips]         = useState(1000);
-  const [bet, setBet]             = useState(0);
-  const [message, setMessage]     = useState('');
+  const [chips, setChips]           = useState(1000);
+  const [bet, setBet]               = useState(0);
+  const [message, setMessage]       = useState('');
   const [displayedPlayerTotal, setDisplayedPlayerTotal] = useState(0);
 
+  // Dex
+  const [dex, setDex]                       = useState<DexEntry[]>([]);
+  const [pendingDexCards, setPendingDexCards] = useState<PokemonCard[]>([]);
+  const isDexEligibleRef = useRef(false);
+
   // Hall of Fame
-  const [hallOfFame, setHallOfFame] = useState<HallOfFameEntry[]>(() => {
+  const [hallOfFame, setHallOfFame]     = useState<HallOfFameEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem('pkmbkj-hof') ?? '[]'); }
     catch { return []; }
   });
+  const [personalHof, setPersonalHof] = useState<HallOfFameEntry[]>([]);
 
-  // ── Persist chips on every change ─────────────────────────────────────────
+  // ── Persist chips on change ───────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
     const users = loadUsers();
@@ -168,14 +171,14 @@ function App() {
     }
   }, [chips, currentUser]);
 
-  // ── Re-fetch missing sprites for cached HoF entries on mount ──────────────
+  // ── Re-fetch missing sprites for HoF entries on mount ────────────────────
   useEffect(() => {
     if (hallOfFame.length === 0) return;
     const refetch = async () => {
       const entries = hallOfFame.map(e => ({ ...e, sprites: [...e.sprites] }));
       let changed = false;
       for (const entry of entries) {
-        if (entry.sprites.every(s => s)) continue; // all loaded already
+        if (entry.sprites.every(s => s)) continue;
         for (let j = 0; j < entry.pokemonNames.length; j++) {
           if (!entry.sprites[j]) {
             entry.sprites[j] = await fetchPokemonSprite(entry.pokemonNames[j]);
@@ -192,38 +195,36 @@ function App() {
     refetch();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Handle login / register ───────────────────────────────────────────────
+  // ── Auth ──────────────────────────────────────────────────────────────────
   const handleAuth = (e: React.FormEvent) => {
     e.preventDefault();
     const username = authUsername.trim();
     const password = authPassword;
-    if (!username || !password) {
-      setAuthError('Please enter a username and password.');
-      return;
-    }
+    if (!username || !password) { setAuthError('Please enter a username and password.'); return; }
+
     const users = loadUsers();
     const hash  = hashPassword(password);
     let startChips = 1000;
     let bonusMsg   = '';
 
     if (users[username]) {
-      if (users[username].passwordHash !== hash) {
-        setAuthError('Incorrect password.');
-        return;
-      }
+      if (users[username].passwordHash !== hash) { setAuthError('Incorrect password.'); return; }
       startChips = users[username].chips;
       if (canClaimBonus(users[username].lastDailyBonus)) {
         startChips += 100;
         users[username].chips = startChips;
         users[username].lastDailyBonus = new Date().toISOString();
-        bonusMsg = '🎁 Daily bonus collected — +$100!';
+        bonusMsg = '🎁 Daily bonus — +$100!';
       }
+      setPersonalHof(users[username].personalHof ?? []);
+      setDex(users[username].dex ?? []);
     } else {
-      // Auto-register
       users[username] = {
         passwordHash: hash,
         chips: 1000,
         lastDailyBonus: new Date().toISOString(),
+        personalHof: [],
+        dex: [],
       };
       bonusMsg = '👋 Welcome! You start with $1,000.';
     }
@@ -236,14 +237,13 @@ function App() {
     setGameState('loading');
   };
 
-  // ── Fetch cards (runs whenever gameState becomes 'loading') ───────────────
+  // ── Fetch cards ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (gameState !== 'loading') return;
     const fetchCards = async () => {
       try {
-        const fetchPage = (page: number) =>
-          fetch(`https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250&page=${page}`)
-            .then(r => r.json());
+        const fetchPage = (p: number) =>
+          fetch(`https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250&page=${p}`).then(r => r.json());
         const [p1, p2] = await Promise.all([fetchPage(1), fetchPage(2)]);
         const raw = [...(p1.data ?? []), ...(p2.data ?? [])];
         const seen = new Set<string>();
@@ -271,12 +271,15 @@ function App() {
   // ── Betting ───────────────────────────────────────────────────────────────
   const placeBet = (amount: number) =>
     setBet(prev => prev + amount > chips ? prev : prev + amount);
-
   const clearBet = () => setBet(0);
 
   // ── Start game ────────────────────────────────────────────────────────────
   const startGame = () => {
     if (bet === 0) { setMessage('Please place a bet first!'); return; }
+
+    // Record dex eligibility: bet must be ≥ 10% of chips BEFORE deduction
+    isDexEligibleRef.current = bet >= chips * 0.1;
+
     const needsShuffle = deck.length < 10;
     const newDeck = needsShuffle ? shuffleArray([...allCards]) : [...deck];
     if (needsShuffle) playShuffle();
@@ -290,13 +293,13 @@ function App() {
     setTimeout(() => playCardDeal(), 120);
     setTimeout(() => playCardDeal(), 240);
     setTimeout(() => playCardDeal(), 360);
-
     setTimeout(() => setDisplayedPlayerTotal(calculateTotal([p1, p2])), 650);
 
     setDeck(newDeck);
     setPlayerHand([p1, p2]);
     setDealerHand([d1, d2]);
     setChips(c => c - bet);
+    setPendingDexCards([]);
     setGameState('playing');
 
     if (calculateTotal([p1, p2]) === 400) {
@@ -356,12 +359,10 @@ function App() {
       const dealerTotal = calculateTotal(currentDealerHand);
       await sleep(800);
 
+      // Save win to global + personal HoF (background)
       const saveWin = async (hand: PokemonCard[], wonBet: number) => {
         const sprites: string[] = [];
-        for (const c of hand) {
-          sprites.push(await fetchPokemonSprite(c.name));
-          await sleep(150);
-        }
+        for (const c of hand) { sprites.push(await fetchPokemonSprite(c.name)); await sleep(150); }
         const entry: HallOfFameEntry = {
           id:           `${Date.now()}`,
           playerName:   currentUser,
@@ -370,23 +371,31 @@ function App() {
           sprites,
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         };
+        // Global (top 10)
         setHallOfFame(prev => {
-          const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 5);
+          const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10);
           localStorage.setItem('pkmbkj-hof', JSON.stringify(updated));
           return updated;
         });
+        // Personal (top 10)
+        setPersonalHof(prev => {
+          const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10);
+          const users = loadUsers();
+          if (users[currentUser]) { users[currentUser].personalHof = updated; saveUsers(users); }
+          return updated;
+        });
       };
+
+      const isWin = dealerTotal > 400 || playerTotal > dealerTotal;
 
       if (dealerTotal > 400) {
         playWin();
         setMessage('Dealer BUSTS! You WIN!');
         setChips(c => c + bet * 2);
-        saveWin(playerHand, bet);
       } else if (playerTotal > dealerTotal) {
         playWin();
         setMessage('You WIN!');
         setChips(c => c + bet * 2);
-        saveWin(playerHand, bet);
       } else if (dealerTotal > playerTotal) {
         playLose();
         setMessage('Dealer wins.');
@@ -394,6 +403,23 @@ function App() {
         setMessage('Push! Bet returned.');
         setChips(c => c + bet);
       }
+
+      if (isWin) {
+        saveWin(playerHand, bet);
+        // Check dex eligibility using ref (stable across closure)
+        if (isDexEligibleRef.current) {
+          // Find cards not yet in dex
+          const users = loadUsers();
+          const currentDex: DexEntry[] = users[currentUser]?.dex ?? [];
+          const eligible = playerHand.filter(c => !currentDex.some(d => d.name === c.name));
+          if (eligible.length > 0) {
+            setPendingDexCards(eligible);
+            setGameState('dex-select');
+            return;
+          }
+        }
+      }
+
       setGameState('game-over');
     };
 
@@ -401,10 +427,34 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState]);
 
+  // ── Add to Pokédex ────────────────────────────────────────────────────────
+  const addToDex = (card: PokemonCard) => {
+    if (dex.some(d => d.name === card.name)) return;
+
+    const newEntry: DexEntry = { name: card.name, sprite: '' };
+    const updatedDex = [...dex, newEntry];
+    setDex(updatedDex);
+    setPendingDexCards(prev => prev.filter(c => c.name !== card.name));
+
+    // Save immediately (without sprite), then update sprite in background
+    const users = loadUsers();
+    if (users[currentUser]) { users[currentUser].dex = updatedDex; saveUsers(users); }
+
+    fetchPokemonSprite(card.name).then(sprite => {
+      if (!sprite) return;
+      setDex(prev => {
+        const updated = prev.map(d => d.name === card.name ? { ...d, sprite } : d);
+        const u = loadUsers();
+        if (u[currentUser]) { u[currentUser].dex = updated; saveUsers(u); }
+        return updated;
+      });
+    });
+  };
+
   // ── New Round ─────────────────────────────────────────────────────────────
   const newRound = () => {
     if (chips <= 0) {
-      const users = loadUsers();
+      const users    = loadUsers();
       const userData = users[currentUser];
       if (userData && canClaimBonus(userData.lastDailyBonus)) {
         userData.chips = 100;
@@ -415,20 +465,14 @@ function App() {
       } else {
         const wait = userData ? bonusCountdown(userData.lastDailyBonus) : '24h';
         setMessage(`No chips! Come back in ${wait} for your daily $100.`);
-        // Stay on game-over so the message is visible
-        setPlayerHand([]);
-        setDealerHand([]);
-        setBet(0);
-        setDisplayedPlayerTotal(0);
+        setPlayerHand([]); setDealerHand([]); setBet(0); setDisplayedPlayerTotal(0);
         return;
       }
     } else {
       setMessage('Place your bet!');
     }
-    setPlayerHand([]);
-    setDealerHand([]);
-    setBet(0);
-    setDisplayedPlayerTotal(0);
+    setPlayerHand([]); setDealerHand([]); setBet(0); setDisplayedPlayerTotal(0);
+    setPendingDexCards([]);
     setGameState('betting');
   };
 
@@ -439,37 +483,24 @@ function App() {
         <div className="auth-container">
           <div className="auth-panel">
             <h1 className="auth-title">Pokémon <span>Blackjack</span></h1>
-            <p className="auth-subtitle">Sign in — or just type a new name to register</p>
+            <p className="auth-subtitle">Sign in — or type a new name to register</p>
             <form className="auth-form" onSubmit={handleAuth}>
               <div className="auth-field">
                 <label className="auth-label">Username</label>
-                <input
-                  className="auth-input"
-                  type="text"
-                  value={authUsername}
+                <input className="auth-input" type="text" value={authUsername}
                   onChange={e => { setAuthUsername(e.target.value); setAuthError(''); }}
-                  placeholder="trainer_name"
-                  autoComplete="username"
-                  autoFocus
-                />
+                  placeholder="trainer_name" autoComplete="username" autoFocus />
               </div>
               <div className="auth-field">
                 <label className="auth-label">Password</label>
-                <input
-                  className="auth-input"
-                  type="password"
-                  value={authPassword}
+                <input className="auth-input" type="password" value={authPassword}
                   onChange={e => { setAuthPassword(e.target.value); setAuthError(''); }}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                />
+                  placeholder="••••••••" autoComplete="current-password" />
               </div>
               {authError && <p className="auth-error">{authError}</p>}
-              <button className="btn-primary btn-deal auth-submit" type="submit">
-                Play
-              </button>
+              <button className="btn-primary btn-deal auth-submit" type="submit">Play</button>
             </form>
-            <p className="auth-hint">No email needed. New accounts start with $1,000 and earn $100/day.</p>
+            <p className="auth-hint">No email needed · New accounts start with $1,000 · $100 daily bonus</p>
           </div>
         </div>
       </div>
@@ -488,23 +519,43 @@ function App() {
     );
   }
 
+  // ── Render: HoF page ──────────────────────────────────────────────────────
+  if (page === 'hof') {
+    return <HofPage globalHof={hallOfFame} personalHof={personalHof} onBack={() => setPage('game')} />;
+  }
+
+  // ── Render: Dex page ──────────────────────────────────────────────────────
+  if (page === 'dex') {
+    return <DexPage dex={dex} onBack={() => setPage('game')} />;
+  }
+
   // ── Render: Game ──────────────────────────────────────────────────────────
-  const dealerTotal    = calculateTotal(dealerHand);
+  const dealerTotal     = calculateTotal(dealerHand);
   const showDealerTotal = gameState !== 'betting' && gameState !== 'playing';
 
   return (
     <div className="app">
       <div className="game-container">
 
+        {/* Header */}
         <header className="header">
           <span className="header-title">Pokémon <span>Blackjack</span></span>
-          <div className="header-chips">
-            <span className="chips-label">Chips</span>
-            <span className="chips-value">${chips.toLocaleString()}</span>
+          <div className="header-nav">
+            <button className="nav-icon-btn" onClick={() => setPage('hof')} title="Hall of Fame">
+              🏆
+            </button>
+            <button className="nav-icon-btn" onClick={() => setPage('dex')} title="My Pokédex">
+              📖
+              {dex.length > 0 && <span className="nav-badge">{dex.length}</span>}
+            </button>
           </div>
-          <span className="player-tag">{currentUser}</span>
+          <div className="header-right">
+            <span className="chips-value">${chips.toLocaleString()}</span>
+            <span className="player-tag">{currentUser}</span>
+          </div>
         </header>
 
+        {/* Dealer */}
         <div className="panel">
           <div className="panel-label">
             Dealer
@@ -529,26 +580,37 @@ function App() {
           </div>
         </div>
 
+        {/* Player */}
         <div className="panel">
           <div className="panel-label">
             Your Hand
             <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}`}>{displayedPlayerTotal} HP</span>
           </div>
           <div className="hand">
-            {playerHand.map((card, idx) => (
-              <div key={card.id + idx} className="card"
-                style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}>
-                <img src={card.images.small} alt={card.name} className="card-image" />
-                <span className="card-hp">{card.hp} HP</span>
-              </div>
-            ))}
+            {playerHand.map((card, idx) => {
+              const isDexPending = gameState === 'dex-select' && pendingDexCards.some(c => c.name === card.name);
+              return (
+                <div
+                  key={card.id + idx}
+                  className={`card${isDexPending ? ' dex-eligible' : ''}`}
+                  onClick={() => isDexPending && addToDex(card)}
+                  style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
+                >
+                  <img src={card.images.small} alt={card.name} className="card-image" />
+                  <span className="card-hp">{card.hp} HP</span>
+                  {isDexPending && <span className="dex-capture-badge">+ DEX</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
 
+        {/* Message */}
         <div className="message-panel">
           <p className="message-text">{message}</p>
         </div>
 
+        {/* Controls */}
         <div className="controls-panel">
           {gameState === 'betting' && (
             <>
@@ -564,7 +626,7 @@ function App() {
               <div className="bet-summary">
                 <span className="bet-display">
                   {bet > 0
-                    ? <>Betting <strong>${bet}</strong></>
+                    ? <>Betting <strong>${bet}</strong>{bet >= chips * 0.1 ? <span className="dex-hint"> · 🎴 Dex eligible</span> : ''}</>
                     : <span className="bet-empty">Select chips to bet</span>}
                 </span>
                 {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
@@ -586,6 +648,17 @@ function App() {
             <p className="bet-display">Dealer is playing…</p>
           )}
 
+          {gameState === 'dex-select' && (
+            <>
+              <p className="dex-select-prompt">
+                Tap a <span className="dex-select-highlight">glowing card</span> to add it to your Pokédex!
+              </p>
+              <button className="btn-primary btn-new-round" onClick={() => setGameState('game-over')}>
+                Done
+              </button>
+            </>
+          )}
+
           {gameState === 'game-over' && (
             <button className="btn-primary btn-new-round" onClick={newRound}>
               {chips <= 0 ? 'Collect Daily Bonus' : 'New Round'}
@@ -594,37 +667,6 @@ function App() {
         </div>
 
         <p className="footer">{deck.length} cards remaining</p>
-
-        <div className="hof-panel">
-          <div className="hof-header">
-            <span className="hof-title">Hall of Fame</span>
-            <span className="hof-subtitle">Top 5 winning bets</span>
-          </div>
-          {hallOfFame.length === 0 ? (
-            <p className="hof-empty">No wins recorded yet. Make your first bet!</p>
-          ) : (
-            <ol className="hof-list">
-              {hallOfFame.map((entry, i) => (
-                <li key={entry.id} className="hof-entry">
-                  <div className="hof-entry-top">
-                    <span className="hof-rank">#{i + 1}</span>
-                    <div className="hof-info">
-                      <span className="hof-name">{entry.playerName}</span>
-                      <span className="hof-meta">${entry.bet} bet · {entry.date}</span>
-                    </div>
-                  </div>
-                  <div className="hof-team">
-                    {entry.sprites.map((src, j) =>
-                      src
-                        ? <img key={j} src={src} alt="" title={entry.pokemonNames[j]} className="hof-sprite" />
-                        : null
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
 
       </div>
     </div>
