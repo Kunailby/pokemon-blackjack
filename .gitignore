@@ -4,5 +4,7 @@ frontend/node_modules/
 backend/node_modules/
 backend/dist/
 *.env
+.env
 .env.local
 frontend/package-lock.json
+backend/package-lock.json

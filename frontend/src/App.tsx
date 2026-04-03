@@ -248,6 +248,7 @@ function App() {
   // Hall of Fame
   const [hallOfFame, setHallOfFame]   = useState<HallOfFameEntry[]>([]);
   const [personalHof, setPersonalHof] = useState<HallOfFameEntry[]>([]);
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
 
   // ── Restore session on refresh ───────────────────────────────────────────
   useEffect(() => {
@@ -718,6 +719,25 @@ function App() {
     setMessage('Daily bonus collected! +$100 — Place your bet!');
   };
 
+  // ── Logout ────────────────────────────────────────────────────────────────
+  const logout = () => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    localStorage.removeItem('pkmbkj-token');
+    localStorage.removeItem('pkmbkj-session');
+    tokenRef.current = '';
+    setCurrentUser('');
+    setChips(1000);
+    setDex([]);
+    setPersonalHof([]);
+    setBet(0);
+    setPlayerHand([]);
+    setDealerHand([]);
+    setMessage('');
+    setDisplayedPlayerTotal(0);
+    setLastDailyBonus('');
+    setLogoutConfirm(false);
+    setGameState('auth');
+  };
   // ── New Round ─────────────────────────────────────────────────────────────
   const newRound = () => {
     setPlayerHand([]); setDealerHand([]); setBet(0); setDisplayedPlayerTotal(0);
@@ -820,6 +840,20 @@ function App() {
           <div className="header-right">
             <span className="chips-value">${chips.toLocaleString()}</span>
             <span className="player-tag">{currentUser}</span>
+            <div className="logout-wrap">
+              <button
+                className="logout-btn"
+                title="Log out"
+                onClick={() => setLogoutConfirm(v => !v)}
+              >⏻</button>
+              {logoutConfirm && (
+                <div className="logout-popover">
+                  <span>Log out?</span>
+                  <button className="logout-confirm" onClick={logout}>Yes</button>
+                  <button className="logout-cancel" onClick={() => setLogoutConfirm(false)}>No</button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
