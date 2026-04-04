@@ -745,7 +745,7 @@ function App() {
           setMessage(prev => prev + ' — Bet too small to unlock a Dex capture.');
         } else {
           // Use dex state directly (avoids stale localStorage reads)
-          const eligible = playerHand.filter(c => !dex.some(d => d.name === c.name));
+          const eligible = playerHand;
           if (eligible.length > 0) {
             setPendingDexCards(eligible);
             // Normal wins get 1 pick; blackjack already set 2
@@ -766,7 +766,6 @@ function App() {
 
   // ── Add to Pokédex ────────────────────────────────────────────────────────
   const addToDex = (card: PokemonCard) => {
-    if (dex.some(d => d.name === card.name)) return;
     if (dexPicksLeft <= 0) return;
 
     const newEntry: DexEntry = { name: card.name, sprite: '' };
@@ -1017,10 +1016,11 @@ function App() {
             <div className="hand">
               {playerHand.map((card, idx) => {
                 const isDexPending = gameState === 'dex-select' && pendingDexCards.some(c => c.name === card.name) && dexPicksLeft > 0;
+                const isDuplicate  = isDexPending && dex.some(d => d.name === card.name);
                 return (
                   <div
                     key={card.id + idx}
-                    className={`card${isDexPending ? ' dex-eligible' : ''}${getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}`}
+                    className={`card${isDexPending ? (isDuplicate ? ' dex-duplicate' : ' dex-eligible') : ''}${getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}`}
                     onClick={(e) => {
                       if (!isDexPending) return;
                       const cardRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
