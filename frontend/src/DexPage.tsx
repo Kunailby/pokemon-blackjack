@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import pokeballIcon from './assets/pokeball.png';
 
 export interface DexEntry {
@@ -9,25 +9,114 @@ export interface DexEntry {
 interface DexPageProps {
   dex: DexEntry[];
   seen: string[];
-  allCards: { name: string; images: { small: string }; hp: number }[];
   onBack: () => void;
 }
 
 type Tab = 'seen' | 'caught';
 
-export default function DexPage({ dex, seen, allCards, onBack }: DexPageProps) {
+// Cache of sprite URLs fetched from PokeAPI
+const spriteCache = new Map<string, string>();
+
+async function fetchSprite(pokemonName: string): Promise<string> {
+  if (spriteCache.has(pokemonName)) return spriteCache.get(pokemonName)!;
+
+  const toSlug = (s: string) =>
+    s.toLowerCase()
+      .replace(/♀/g, '-f').replace(/♂/g, '-m')
+      .replace(/['.]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+  const base = pokemonName
+    .replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|VUNION|BREAK|LV\.X|δ|\d+)(\s|$)/gi, ' ')
+    .replace(/^(Dark|Light|Team Rocket's|Rocket's|Gym|M\s)\s*/i, '')
+    .trim();
+
+  const attempts = [
+    toSlug(base.split(' ')[0]),
+    toSlug(base),
+    toSlug(pokemonName.split(' ')[0]),
+    toSlug(pokemonName),
+  ].filter((v, i, a) => Boolean(v) && a.indexOf(v) === i);
+
+  for (const name of attempts) {
+    try {
+      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.sprites?.front_default) {
+          spriteCache.set(pokemonName, data.sprites.front_default);
+          return data.sprites.front_default;
+        }
+      }
+    } catch { /* try next */ }
+  }
+  spriteCache.set(pokemonName, '');
+  return '';
+}
+
+// Fetch all Pokemon species from PokeAPI
+async function fetchAllSpecies(): Promise<string[]> {
+  try {
+    const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1025&offset=0');
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    return data.results.map((p: any) => {
+      // Convert API name (e.g. "nidoran-f") to display name
+      return p.name
+        .replace(/-f$/, '♀')
+        .replace(/-m$/, '♂')
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+    });
+  } catch {
+    return [];
+  }
+}
+
+export default function DexPage({ dex, seen, onBack }: DexPageProps) {
   const [tab, setTab] = useState<Tab>('seen');
+  const [species, setSpecies] = useState<string[]>([]);
+  const [sprites, setSprites] = useState<Map<string, string>>(new Map());
 
   const caughtSet = new Set(dex.map(d => d.name));
   const seenSet = new Set(seen);
 
-  // Build master list: unique Pokemon names from allCards + any caught/seen not in allCards
-  const masterNames = new Set<string>(allCards.map(c => c.name));
-  caughtSet.forEach(n => masterNames.add(n));
-  seenSet.forEach(n => masterNames.add(n));
-  const allNames = Array.from(masterNames).sort((a, b) => a.localeCompare(b));
+  // Merge caught into seen (for backwards compat with pre-update data)
+  caughtSet.forEach(n => seenSet.add(n));
 
-  const caughtEntries = dex.filter(d => caughtSet.has(d.name)).sort((a, b) => a.name.localeCompare(b.name));
+  useEffect(() => {
+    fetchAllSpecies().then(list => {
+      if (list.length > 0) setSpecies(list);
+    });
+  }, []);
+
+  // Fetch sprites for all seen Pokemon
+  useEffect(() => {
+    const loadSprites = async () => {
+      const seenNames = Array.from(seenSet);
+      const newSprites = new Map<string, string>();
+      for (const name of seenNames) {
+        if (spriteCache.has(name)) {
+          newSprites.set(name, spriteCache.get(name)!);
+        } else {
+          const url = await fetchSprite(name);
+          if (url) newSprites.set(name, url);
+        }
+      }
+      setSprites(prev => {
+        const merged = new Map(prev);
+        newSprites.forEach((v, k) => merged.set(k, v));
+        return merged;
+      });
+    };
+    if (seenSet.size > 0) loadSprites();
+  }, [seen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const caughtEntries = dex.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Master list: all known species, or fallback to seen+caught names
+  const masterList = species.length > 0 ? species : Array.from(seenSet).sort();
 
   return (
     <div className="app">
@@ -45,35 +134,35 @@ export default function DexPage({ dex, seen, allCards, onBack }: DexPageProps) {
             className={`dex-tab ${tab === 'seen' ? 'active' : ''}`}
             onClick={() => setTab('seen')}
           >
-            Seen ({allNames.length})
+            Seen
           </button>
           <button
             className={`dex-tab ${tab === 'caught' ? 'active' : ''}`}
             onClick={() => setTab('caught')}
           >
-            Caught ({caughtEntries.length})
+            Caught
           </button>
         </div>
 
         {/* ── Seen Tab ─────────────────────────────────────────────── */}
-        {tab === 'seen' && (
+        {tab === 'seen' && masterList.length === 0 ? (
+          <div className="panel">
+            <p className="hof-empty">Loading Pokédex data…</p>
+          </div>
+        ) : tab === 'seen' && (
           <div className="dex-grid">
-            {allNames.map(name => {
+            {masterList.map(name => {
               const isCaught = caughtSet.has(name);
               const isSeen = seenSet.has(name);
-              const card = allCards.find(c => c.name === name);
-              const caughtEntry = dex.find(d => d.name === name);
+              const sprite = sprites.get(name);
 
               if (isSeen) {
-                // Seen — show colored sprite with optional pokeball if caught
                 return (
                   <div key={name} className={`dex-card ${isCaught ? 'caught' : ''}`}>
-                    {caughtEntry?.sprite ? (
-                      <img src={caughtEntry.sprite} alt={name} className="dex-sprite" />
-                    ) : card?.images?.small ? (
-                      <img src={card.images.small} alt={name} className="dex-sprite" />
+                    {sprite ? (
+                      <img src={sprite} alt={name} className="dex-sprite" />
                     ) : (
-                      <div className="dex-sprite-placeholder">?</div>
+                      <div className="dex-sprite-placeholder">{name[0]}</div>
                     )}
                     <span className="dex-name">{name}</span>
                     {isCaught && (
@@ -85,7 +174,6 @@ export default function DexPage({ dex, seen, allCards, onBack }: DexPageProps) {
                 );
               }
 
-              // Not seen — grey silhouette
               return (
                 <div key={name} className="dex-card unseen">
                   <div className="dex-silhouette">?</div>

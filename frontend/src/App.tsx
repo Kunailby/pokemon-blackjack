@@ -266,21 +266,36 @@ function App() {
 
       // Subscribe to real-time data changes (cross-device sync)
       const unsubData = subscribeToUserData(uid, (data) => {
+        const dexData = data.dex ?? [];
+        const seenData = data.seenPokemon ?? [];
+        // Merge caught into seen
+        const caughtNames = new Set(dexData.map((d: DexEntry) => d.name));
+        const mergedSeen = Array.from(new Set([...seenData, ...caughtNames]));
         setChips(data.chips);
         setLastDailyBonus(data.lastDailyBonus ?? '');
         setPersonalHof(data.personalHof ?? []);
-        setDex(data.dex ?? []);
-        setSeenPokemon(data.seenPokemon ?? []);
+        setDex(dexData);
+        setSeenPokemon(mergedSeen);
       });
 
       // Also do an immediate fetch for initial render
       const data = await getUserData(uid);
+      const dexData = data.dex ?? [];
+      const seenData = data.seenPokemon ?? [];
+
+      // Migration: ensure all caught Pokemon are also in seen list
+      const caughtNames = new Set(dexData.map((d: DexEntry) => d.name));
+      const mergedSeen = Array.from(new Set([...seenData, ...caughtNames]));
+      if (mergedSeen.length !== seenData.length) {
+        updateUserData(uid, { seenPokemon: mergedSeen }).catch(() => {});
+      }
+
       setCurrentUser(displayName);
       setChips(data.chips);
       setLastDailyBonus(data.lastDailyBonus ?? '');
       setPersonalHof(data.personalHof ?? []);
-      setDex(data.dex ?? []);
-      setSeenPokemon(data.seenPokemon ?? []);
+      setDex(dexData);
+      setSeenPokemon(mergedSeen);
       uidRef.current = uid;
       setGameState('loading');
 
@@ -813,7 +828,7 @@ function App() {
 
   // ── Render: Dex page ──────────────────────────────────────────────────────
   if (page === 'dex') {
-    return <DexPage dex={dex} seen={seenPokemon} allCards={allCards} onBack={() => setPage('game')} />;
+    return <DexPage dex={dex} seen={seenPokemon} onBack={() => setPage('game')} />;
   }
 
   // ── Render: Game ──────────────────────────────────────────────────────────
