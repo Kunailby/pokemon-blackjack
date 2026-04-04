@@ -320,16 +320,25 @@ function App() {
 
   // ── Firebase auth state listener — restores session on refresh ────────────
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
+    // Keep the data unsubscribe function in a local variable so it can be
+    // cleaned up both when auth state changes AND when the component unmounts.
+    // NOTE: the onAuthStateChanged callback must NOT be async — if it returns
+    // a Promise instead of a cleanup function, React ignores it and the
+    // Firestore listener leaks.
+    let unsubData: (() => void) | null = null;
+
+    const unsub = onAuthStateChanged(auth, (user) => {
+      // Tear down any previous user's data listener immediately
+      if (unsubData) { unsubData(); unsubData = null; }
       if (!user) return;
+
       const uid = user.uid;
       const displayName = user.displayName || 'Trainer';
 
       // Subscribe to real-time data changes (cross-device sync)
-      const unsubData = subscribeToUserData(uid, (data) => {
+      unsubData = subscribeToUserData(uid, (data) => {
         const dexData = data.dex ?? [];
         const seenData = data.seenPokemon ?? [];
-        // Merge caught into seen
         const caughtNames = Array.from(new Set(dexData.map((d: DexEntry) => d.name)));
         const mergedSeen = Array.from(new Set([...seenData, ...caughtNames]));
         setChips(data.chips);
@@ -339,31 +348,34 @@ function App() {
         setSeenPokemon(mergedSeen);
       });
 
-      // Also do an immediate fetch for initial render
-      const data = await getUserData(uid);
-      const dexData = data.dex ?? [];
-      const seenData = data.seenPokemon ?? [];
+      // Async initial fetch — fire-and-forget (do NOT make the outer callback async)
+      (async () => {
+        const data = await getUserData(uid);
+        const dexData = data.dex ?? [];
+        const seenData = data.seenPokemon ?? [];
 
-      // Migration: ensure all caught Pokemon are also in seen list
-      const caughtNames = Array.from(new Set(dexData.map((d: DexEntry) => d.name)));
-      const mergedSeen = Array.from(new Set([...seenData, ...caughtNames]));
-      if (mergedSeen.length !== seenData.length) {
-        updateUserData(uid, { seenPokemon: mergedSeen }).catch(() => {});
-      }
+        // Migration: ensure all caught Pokemon are also in seen list
+        const caughtNames = Array.from(new Set(dexData.map((d: DexEntry) => d.name)));
+        const mergedSeen = Array.from(new Set([...seenData, ...caughtNames]));
+        if (mergedSeen.length !== seenData.length) {
+          updateUserData(uid, { seenPokemon: mergedSeen }).catch(() => {});
+        }
 
-      setCurrentUser(displayName);
-      setChips(data.chips);
-      setLastDailyBonus(data.lastDailyBonus ?? '');
-      setPersonalHof(data.personalHof ?? []);
-      setDex(dexData);
-      setSeenPokemon(mergedSeen);
-      uidRef.current = uid;
-      setGameState('loading');
-
-      // Return cleanup
-      return () => unsubData();
+        setCurrentUser(displayName);
+        setChips(data.chips);
+        setLastDailyBonus(data.lastDailyBonus ?? '');
+        setPersonalHof(data.personalHof ?? []);
+        setDex(dexData);
+        setSeenPokemon(mergedSeen);
+        uidRef.current = uid;
+        setGameState('loading');
+      })();
     });
-    return () => unsub();
+
+    return () => {
+      unsub();
+      if (unsubData) unsubData();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Global HoF — loaded from localStorage (shared across accounts) ────────
@@ -762,7 +774,10 @@ function App() {
           if (eligible.length > 0) {
             setPendingDexCards(eligible);
             // Normal wins get 1 pick; blackjack already set 2
-            if (dexPicksLeft === 0) setDexPicksLeft(1);
+            // Use functional updater to avoid stale closure — the dealer-turn
+            // effect only lists [gameState] in its deps, so dexPicksLeft read
+            // directly from closure may be the previous round's value (0).
+            setDexPicksLeft(prev => prev === 0 ? 1 : prev);
             setGameState('dex-select');
             return;
           }
@@ -785,7 +800,7 @@ function App() {
     const updatedDex = [...dex, newEntry];
     setDex(updatedDex);
     setNewCatchCount(prev => prev + 1);
-    setPendingDexCards(prev => prev.filter(c => c.name !== card.name));
+    setPendingDexCards(prev => prev.filter(c => c.id !== card.id));
     setDexPicksLeft(prev => prev - 1);
 
     // Save immediately (without sprite), then update sprite in background
@@ -842,6 +857,7 @@ function App() {
     setMessageType('');
     setDisplayedPlayerTotal(0);
     setLastDailyBonus('');
+    setSeenPokemon([]);
     setLogoutConfirm(false);
     setGameState('auth');
   };
