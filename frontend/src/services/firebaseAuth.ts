@@ -3,6 +3,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   User as FirebaseUser,
+  updateProfile,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -47,7 +48,7 @@ export async function login(username: string, password: string): Promise<{ user:
     // User doesn't exist yet — create account
     if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await cred.user.updateDisplayName(username);
+      await updateProfile(cred.user, { displayName: username });
       // Initialize with default data
       await setDoc(doc(db, 'users', cred.user.uid), DEFAULT_DATA);
       return { user: cred.user, data: { ...DEFAULT_DATA }, isNew: true };
