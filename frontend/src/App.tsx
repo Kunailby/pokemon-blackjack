@@ -75,7 +75,7 @@ function saveUsers(users: UserStore): void {
 
 // ── Card cache (6-hour TTL) ───────────────────────────────────────────────────
 // ─── Card cache ──────────────────────────────────────────────────────────────
-const CARD_CACHE_VERSION = 4; // Bumped to force re-fetch with ID-based dedup + variety fix
+const CARD_CACHE_VERSION = 5; // Bumped: fix shoe cache versioning + random page distribution
 const CARD_CACHE_KEY = 'pkmbkj-cards-v' + CARD_CACHE_VERSION;
 
 function loadCardCache(): PokemonCard[] | null {
@@ -102,21 +102,28 @@ function saveCardCache(cards: PokemonCard[]): void {
   } catch { /* ignore */ }
 })();
 
-// ── Shoe cache (persisted across refreshes) ───────────────────────────────────
+// ── Shoe cache (versioned — invalidated whenever card cache is bumped) ───────
+const SHOE_CACHE_KEY = 'pkmbkj-shoe-v' + CARD_CACHE_VERSION;
+
 function loadShoeCache(): PokemonCard[] | null {
   try {
-    const raw = localStorage.getItem('pkmbkj-shoe');
+    const raw = localStorage.getItem(SHOE_CACHE_KEY);
     if (!raw) return null;
     const shoe = JSON.parse(raw) as PokemonCard[];
     if (shoe.length === 0) return null;
-    // Invalidate cache if cards don't have types/rarity (pre-update data)
-    if (!shoe[0].types || !shoe[0].rarity) return null;
     return shoe;
   } catch { return null; }
 }
 
 function saveShoeCache(shoe: PokemonCard[]): void {
-  try { localStorage.setItem('pkmbkj-shoe', JSON.stringify(shoe)); }
+  try {
+    // Remove old shoe versions
+    for (let i = 1; i < CARD_CACHE_VERSION; i++) {
+      localStorage.removeItem('pkmbkj-shoe-v' + i);
+    }
+    localStorage.removeItem('pkmbkj-shoe'); // remove unversioned legacy key
+    localStorage.setItem(SHOE_CACHE_KEY, JSON.stringify(shoe));
+  }
   catch { /* quota exceeded — skip */ }
 }
 
