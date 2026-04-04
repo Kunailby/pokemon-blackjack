@@ -18,10 +18,10 @@ Pokemon Blackjack is a card game that combines Blackjack mechanics with Pokemon 
 - Simultaneous bust: player busts before dealer turn, so dealer bust during dealer-turn always means player wins
 
 **Dealer deal:**
-- Dealer receives **2 cards**: one face-up (index 0), one face-down / hole card (index 1)
-- Only the face-up card HP is shown to the player during their turn (displayed as "X HP + ?")
+- Dealer receives **3 cards**: two face-up (indices 0-1) and one face-down / hole card (index 2)
+- Both face-up cards' HP are shown to the player during their turn; the hole card is hidden
 - When the dealer's turn begins the hole card is revealed; all cards count toward the dealer's total
-- If the dealer's starting 2-card total is already ≥ 301, they stand immediately without drawing
+- If the dealer's starting 3-card total is already ≥ 301, they stand immediately without drawing
 
 **Dex eligibility:**
 - To capture Pokémon after a win, the bet must be **≥ 10% of the player's chips at Deal time** (before deduction)

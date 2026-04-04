@@ -561,17 +561,19 @@ function App() {
     const p1 = newDeck.pop()!;
     const d1 = newDeck.pop()!;
     const p2 = newDeck.pop()!;
-    const d2 = newDeck.pop()!; // face-down (hole card)
+    const d2 = newDeck.pop()!;
+    const d3 = newDeck.pop()!; // face-down (hole card)
 
     playCardDeal();
     setTimeout(() => playCardDeal(), 120);
     setTimeout(() => playCardDeal(), 240);
     setTimeout(() => playCardDeal(), 360);
-    setTimeout(() => setDisplayedPlayerTotal(calculateTotal([p1, p2])), 600);
+    setTimeout(() => playCardDeal(), 480);
+    setTimeout(() => setDisplayedPlayerTotal(calculateTotal([p1, p2])), 750);
 
     setDeck(newDeck);
     setPlayerHand([p1, p2]);
-    setDealerHand([d1, d2]);
+    setDealerHand([d1, d2, d3]);
     setChips(c => c - bet);
     setPendingDexCards([]);
     setMessageType('');
@@ -848,9 +850,9 @@ function App() {
   }
 
   // ── Render: Game ──────────────────────────────────────────────────────────
-  // Only show face-up card (index 0) during 'playing'; reveal full hand once dealer acts
+  // Only show face-up cards (indices 0-1) during 'playing'; reveal full hand once dealer acts
   const dealerTotal     = gameState === 'playing'
-    ? calculateTotal(dealerHand.slice(0, 1))
+    ? calculateTotal(dealerHand.slice(0, 2))
     : calculateTotal(dealerHand);
   const showDealerTotal = gameState !== 'betting';
 
@@ -937,7 +939,7 @@ function App() {
               {dealerHand.map((card, idx) => (
                 <div key={card.id + idx} className="card"
                   style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
-                  {gameState === 'playing' && idx === 1 ? (
+                  {gameState === 'playing' && idx === 2 ? (
                     <div className="card-back">
                       <div className="card-back-ball" />
                     </div>
