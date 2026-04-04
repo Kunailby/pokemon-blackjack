@@ -434,7 +434,7 @@ function App() {
 
       // Use cached cards if fresh (skips API call on refresh)
       const cached = loadCardCache();
-      if (cached && cached.length >= 20) {
+      if (cached && cached.length >= 100) {
         setAllCards(cached);
         // Restore persisted shoe; only build a new one if none exists
         setDeck(loadShoeCache() ?? buildShoe(cached));
@@ -448,28 +448,26 @@ function App() {
         const fetchPage = (p: number) =>
           fetch(`https://api.pokemontcg.io/v2/cards?q=supertype:pokemon&pageSize=250&page=${p}`).then(r => r.json());
 
-        // Fetch page 1 to discover total card count
+        // Fetch pages spread across the full catalog for maximum variety
         const p1 = await fetchPage(1);
         const totalCount: number = p1.totalCount ?? 1000;
-        const maxPage = Math.max(2, Math.ceil(totalCount / 250));
+        const maxPage = Math.ceil(totalCount / 250);
 
-        // Pick 4 additional pages spread randomly across the full catalog
-        const picks = new Set<number>([1]);
-        const segment = Math.floor(maxPage / 4);
-        for (let i = 0; i < 4; i++) {
-          const base = i * segment + 2;
-          picks.add(Math.min(maxPage, base + Math.floor(Math.random() * Math.max(1, segment))));
-        }
-        picks.delete(1); // already have p1
+        // Fetch 10 pages spread evenly across the catalog
+        const pageCount = Math.min(10, maxPage);
+        const segment = Math.floor(maxPage / pageCount);
+        const pages = Array.from({ length: pageCount }, (_, i) => 1 + i * segment);
 
-        const extras = await Promise.all(Array.from(picks).map(p => fetchPage(p)));
-        const raw: any[] = (p1.data ?? []).concat(...extras.map((r: any) => r.data ?? []));
-        const seen = new Set<string>();
+        const results = await Promise.all(pages.map(p => fetchPage(p)));
+        const raw: any[] = results.flatMap(r => r.data ?? []);
+
+        // Deduplicate by unique card id (allows multiple Charizard variants from different sets)
+        const seenIds = new Set<string>();
         const valid: PokemonCard[] = [];
         for (const c of raw) {
           if (!c.hp || parseInt(c.hp) <= 0 || !c.images?.small) continue;
-          if (seen.has(c.name)) continue;
-          seen.add(c.name);
+          if (seenIds.has(c.id)) continue;
+          seenIds.add(c.id);
           valid.push({ id: c.id, name: c.name, hp: parseInt(c.hp), images: c.images });
         }
         if (valid.length < 20) throw new Error('Too few cards');
