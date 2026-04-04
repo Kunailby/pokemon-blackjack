@@ -613,6 +613,9 @@ function App() {
   const startGame = () => {
     if (bet === 0) { setMessage('Set a wager before dealing.'); return; }
 
+    // Reset picks unconditionally so no stale value from a prior round leaks in
+    setDexPicksLeft(0);
+
     // Record dex eligibility: bet must be ≥ 10% of chips BEFORE deduction
     isDexEligibleRef.current = bet >= chips * 0.1;
 
@@ -724,12 +727,12 @@ function App() {
         };
         // Global HoF — saved locally (shared across accounts on this device)
         setHallOfFame(prev => {
-          const updated = [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10);
+          const updated = [...prev, entry].sort((a, b) => b.bet - a.bet || Number(b.id) - Number(a.id)).slice(0, 10);
           localStorage.setItem('pkmbkj-hof', JSON.stringify(updated));
           return updated;
         });
         // Personal HoF (via state → triggers sync effect)
-        setPersonalHof(prev => [...prev, entry].sort((a, b) => b.bet - a.bet).slice(0, 10));
+        setPersonalHof(prev => [...prev, entry].sort((a, b) => b.bet - a.bet || Number(b.id) - Number(a.id)).slice(0, 10));
       };
 
       // Guard: player already busted before dealer turn (shouldn't normally happen)
@@ -1111,7 +1114,7 @@ function App() {
                 <p className="dex-threshold-hint">
                   {bet >= chips * 0.1
                     ? <span className="dex-unlocked">🎴 Dex capture unlocked</span>
-                    : `Bet $${Math.ceil(chips * 0.1)}+ to unlock Dex capture`}
+                    : `Bet $${Math.max(5, Math.ceil(chips * 0.1))}+ to unlock Dex capture`}
                 </p>
                 <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>
                   Deal

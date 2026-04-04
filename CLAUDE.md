@@ -195,7 +195,7 @@ The entire game loop runs client-side:
 
 1. **Loading** — Fetch 250 unique Pokemon cards from TCG API; fall back to 15 hardcoded cards if the API fails
 2. **Betting** — Player picks a chip amount ($10, $25, $50, $100)
-3. **Playing** — Player receives 2 cards; dealer receives 2 cards (first face-up, second face-down). Player can **Hit** or **Stand**
+3. **Playing** — Player receives 2 cards; dealer receives 3 cards (two face-up, one face-down hole card). Player can **Hit** or **Stand**
 4. **Dealer Turn** — Dealer auto-plays with 1-second delays per card until HP ≥ 301
 5. **Game Over** — Compare totals, pay out chips, allow replay
 
