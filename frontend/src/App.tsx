@@ -240,7 +240,6 @@ function App() {
   const [authLoading, setAuthLoading]   = useState(false);
   const loginBonusRef  = useRef('');
   const tokenRef       = useRef('');   // JWT, kept out of state to avoid re-renders
-  const syncTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Game
   const [allCards, setAllCards]     = useState<PokemonCard[]>([]);
@@ -273,8 +272,8 @@ function App() {
     const session = localStorage.getItem('pkmbkj-session');
     if (!session) return;
 
-    // Try backend first; fall back to localStorage
     const restore = async () => {
+      // Always fetch from backend when a token exists — backend is authoritative
       if (token) {
         try {
           const data = await apiCall('/auth/profile', 'GET', undefined, token);
@@ -286,9 +285,21 @@ function App() {
           setDex(data.user.dex ?? []);
           setGameState('loading');
           return;
-        } catch { /* fall through to localStorage */ }
+        } catch {
+          // Backend unavailable — fall back to localStorage cache
+          const users = loadUsers();
+          const ud    = users[session];
+          if (!ud) { localStorage.removeItem('pkmbkj-session'); return; }
+          setCurrentUser(session);
+          setChips(ud.chips);
+          setLastDailyBonus(ud.lastDailyBonus ?? '');
+          setPersonalHof(ud.personalHof ?? []);
+          setDex(ud.dex ?? []);
+          setGameState('loading');
+          return;
+        }
       }
-      // Fallback: localStorage
+      // No token — use localStorage fallback
       const users = loadUsers();
       const ud    = users[session];
       if (!ud) { localStorage.removeItem('pkmbkj-session'); return; }
@@ -320,10 +331,10 @@ function App() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Debounced backend sync ────────────────────────────────────────────────
+  // ── Sync state to backend and localStorage on every change ────────────────
   useEffect(() => {
     if (!currentUser) return;
-    // Always update localStorage as a backup
+    // Always update localStorage as local cache
     const users = loadUsers();
     if (users[currentUser]) {
       users[currentUser].chips          = chips;
@@ -332,15 +343,12 @@ function App() {
       users[currentUser].dex            = dex;
       saveUsers(users);
     }
-    // Debounce backend sync
+    // Sync to backend immediately (backend is authoritative)
     if (!tokenRef.current) return;
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = setTimeout(() => {
-      apiCall('/auth/sync', 'PUT',
-        { chips, lastDailyBonus, personalHof, dex },
-        tokenRef.current
-      ).catch(() => { /* silent — localStorage is the fallback */ });
-    }, 2000);
+    apiCall('/auth/sync', 'PUT',
+      { chips, lastDailyBonus, personalHof, dex },
+      tokenRef.current
+    ).catch(() => { /* silent — localStorage is the fallback */ });
   }, [chips, lastDailyBonus, dex, personalHof, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Re-fetch missing sprites for HoF entries on mount ────────────────────
@@ -404,16 +412,17 @@ function App() {
     setAuthLoading(true);
 
     const hash = hashPassword(password);
-    let startChips    = 1000;
+    let startChips     = 1000;
     let startLastBonus = '';
     let startPersonal: HallOfFameEntry[] = [];
     let startDex: DexEntry[] = [];
     let bonusMsg = '';
+    let authenticated = false;
 
     try {
-      // Try backend (with 6s timeout)
+      // Backend is authoritative — always try backend first
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 6000);
+      const timer = setTimeout(() => ctrl.abort(), 10000);
       const data = await apiCall('/auth/login', 'POST', { username, passwordHash: hash });
       clearTimeout(timer);
 
@@ -424,6 +433,7 @@ function App() {
       startLastBonus = data.user.lastDailyBonus ?? '';
       startPersonal  = data.user.personalHof ?? [];
       startDex       = data.user.dex ?? [];
+      authenticated  = true;
 
       if (data.isNew) {
         bonusMsg = "Welcome, Trainer! You're starting with $1,000.";
@@ -431,42 +441,42 @@ function App() {
         startChips     += 100;
         startLastBonus  = new Date().toISOString();
         bonusMsg        = 'Daily bonus — +$100 added to your stack!';
-        // Persist the bonus claim immediately
+        // Persist the bonus claim immediately to backend
         apiCall('/auth/sync', 'PUT',
           { chips: startChips, lastDailyBonus: startLastBonus, personalHof: startPersonal, dex: startDex },
           tokenRef.current
         ).catch(() => {});
       }
     } catch (err: any) {
-      // Incorrect password comes back as an API error
+      // Incorrect password is a hard failure
       if (err.message === 'Incorrect password.') {
         setAuthError('Incorrect password.');
         setAuthLoading(false);
         return;
       }
-      // Network error — fall back to localStorage
+      // Network/backend error — check if this user exists in localStorage
+      // If they do, they previously used this device offline; load local data
+      // If they don't, they may be trying to log into an account created on another device
       const users = loadUsers();
-      if (users[username]) {
-        if (users[username].passwordHash !== hash) { setAuthError('Incorrect password.'); setAuthLoading(false); return; }
-        startChips     = users[username].chips;
-        startLastBonus = users[username].lastDailyBonus ?? '';
-        startPersonal  = users[username].personalHof ?? [];
-        startDex       = users[username].dex ?? [];
-        if (canClaimBonus(startLastBonus)) {
-          startChips    += 100;
-          startLastBonus = new Date().toISOString();
-          bonusMsg       = 'Daily bonus — +$100 added to your stack!';
-        }
+      const localUser = users[username];
+      if (localUser) {
+        if (localUser.passwordHash !== hash) { setAuthError('Incorrect password.'); setAuthLoading(false); return; }
+        startChips     = localUser.chips;
+        startLastBonus = localUser.lastDailyBonus ?? '';
+        startPersonal  = localUser.personalHof ?? [];
+        startDex       = localUser.dex ?? [];
+        bonusMsg       = 'Playing offline — data saved locally.';
       } else {
-        users[username] = { passwordHash: hash, chips: 1000, lastDailyBonus: new Date().toISOString(), personalHof: [], dex: [] };
-        bonusMsg = "Welcome, Trainer! You're starting with $1,000.";
+        // User doesn't exist locally or on backend — show error
+        setAuthError('Could not connect to server. Check your connection and try again.');
+        setAuthLoading(false);
+        return;
       }
-      saveUsers(users);
     }
 
-    // Persist to localStorage as backup
+    // Persist to localStorage as offline cache
     const users = loadUsers();
-    users[username] = { ...(users[username] || {}), passwordHash: hash, chips: startChips, lastDailyBonus: startLastBonus, personalHof: startPersonal, dex: startDex };
+    users[username] = { passwordHash: hash, chips: startChips, lastDailyBonus: startLastBonus, personalHof: startPersonal, dex: startDex };
     saveUsers(users);
 
     localStorage.setItem('pkmbkj-session', username);
@@ -755,8 +765,16 @@ function App() {
       if (!sprite) return;
       setDex(prev => {
         const updated = prev.map(d => d.name === card.name ? { ...d, sprite } : d);
+        // Update localStorage cache
         const u = loadUsers();
         if (u[currentUser]) { u[currentUser].dex = updated; saveUsers(u); }
+        // Sync sprite to backend immediately
+        if (tokenRef.current) {
+          apiCall('/auth/sync', 'PUT',
+            { chips, lastDailyBonus, personalHof, dex: updated },
+            tokenRef.current
+          ).catch(() => {});
+        }
         return updated;
       });
     });
