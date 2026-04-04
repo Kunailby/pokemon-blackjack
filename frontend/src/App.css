@@ -886,6 +886,128 @@ button:focus-visible,
   box-shadow: 0 0 6px rgba(255,255,255,0.2);
 }
 
+/* ─── Card top bar (types + rarity) ──────────────────────────────────────── */
+.card-top-bar {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 4px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.card-types {
+  display: flex;
+  gap: 3px;
+}
+
+.type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* Pokemon type colors */
+.type-fire       { background: #f08030; }
+.type-water      { background: #6890f0; }
+.type-grass      { background: #78c850; }
+.type-electric   { background: #f8d030; color: #333; }
+.type-lightning  { background: #f8d030; color: #333; }
+.type-psychic    { background: #f85888; }
+.type-fighting   { background: #c03028; }
+.type-poison     { background: #a040a0; }
+.type-ground     { background: #e0c068; color: #333; }
+.type-flying     { background: #a890f0; }
+.type-bug        { background: #a8b820; }
+.type-rock       { background: #b8a038; }
+.type-ghost      { background: #705898; }
+.type-dragon     { background: #7038f8; }
+.type-dark       { background: #705848; }
+.type-steel      { background: #b8b8d0; color: #333; }
+.type-fairy      { background: #ee99ac; }
+.type-normal     { background: #a8a878; }
+.type-colorless  { background: #a8a878; }
+.type-darkness   { background: #705848; }
+.type-metal      { background: #b8b8d0; color: #333; }
+
+/* ─── Rarity badges ───────────────────────────────────────────────────────── */
+.rarity-badge {
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.rarity-common   { background: rgba(150,150,150,0.85); color: #fff; }
+.rarity-uncommon { background: rgba(100,180,80,0.9);   color: #fff; }
+.rarity-rare     { background: rgba(80,140,220,0.9);    color: #fff; }
+.rarity-holo {
+  background: linear-gradient(135deg, #ffd700, #ffaa00, #ffd700);
+  color: #333;
+  animation: holo-shimmer 2s ease-in-out infinite;
+}
+.rarity-secret {
+  background: linear-gradient(135deg, #ff6b6b, #ffd700, #6bff6b, #6bb5ff, #d76bff);
+  background-size: 200% 200%;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  animation: rainbow-shift 3s ease-in-out infinite;
+}
+
+@keyframes holo-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes rainbow-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* ─── Holo card shimmer effect ────────────────────────────────────────────── */
+.card.holo {
+  border: 2px solid rgba(255, 215, 0, 0.5);
+}
+.card.holo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.15) 45%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0.15) 55%,
+    transparent 60%
+  );
+  background-size: 200% 100%;
+  animation: card-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 3;
+  border-radius: 12px;
+}
+
+@keyframes card-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .card-hp {
   position: absolute;
   bottom: 6px;

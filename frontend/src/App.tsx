@@ -12,6 +12,8 @@ interface PokemonCard {
   name: string;
   hp: number;
   images: { small: string; large: string };
+  types: string[];
+  rarity: string;
 }
 
 interface UserData {
@@ -100,6 +102,16 @@ function loadShoeCache(): PokemonCard[] | null {
 function saveShoeCache(shoe: PokemonCard[]): void {
   try { localStorage.setItem('pkmbkj-shoe', JSON.stringify(shoe)); }
   catch { /* quota exceeded — skip */ }
+}
+
+// ── Rarity helper ─────────────────────────────────────────────────────────────
+function getRarityClass(rarity: string): string {
+  const r = rarity.toLowerCase();
+  if (r.includes('secret') || r.includes('promo')) return 'secret';
+  if (r.includes('holo') || r.includes('ultra rare') || r.includes('full art')) return 'holo';
+  if (r.includes('rare')) return 'rare';
+  if (r.includes('uncommon')) return 'uncommon';
+  return 'common';
 }
 
 // ── Firebase imports ──────────────────────────────────────────────────────────
@@ -197,21 +209,21 @@ async function fetchPokemonSprite(cardName: string): Promise<string> {
 }
 
 const FALLBACK_CARDS: PokemonCard[] = [
-  { id: 'base1-4',  name: 'Charizard',  hp: 120, images: { small: 'https://images.pokemontcg.io/base1/4.png',  large: 'https://images.pokemontcg.io/base1/4_hires.png'  }},
-  { id: 'base1-2',  name: 'Blastoise',  hp: 100, images: { small: 'https://images.pokemontcg.io/base1/2.png',  large: 'https://images.pokemontcg.io/base1/2_hires.png'  }},
-  { id: 'base1-15', name: 'Venusaur',   hp: 100, images: { small: 'https://images.pokemontcg.io/base1/15.png', large: 'https://images.pokemontcg.io/base1/15_hires.png' }},
-  { id: 'base1-58', name: 'Pikachu',    hp:  40, images: { small: 'https://images.pokemontcg.io/base1/58.png', large: 'https://images.pokemontcg.io/base1/58_hires.png' }},
-  { id: 'base1-10', name: 'Mewtwo',     hp:  60, images: { small: 'https://images.pokemontcg.io/base1/10.png', large: 'https://images.pokemontcg.io/base1/10_hires.png' }},
-  { id: 'base1-8',  name: 'Machamp',    hp: 100, images: { small: 'https://images.pokemontcg.io/base1/8.png',  large: 'https://images.pokemontcg.io/base1/8_hires.png'  }},
-  { id: 'base2-20', name: 'Gengar',     hp:  80, images: { small: 'https://images.pokemontcg.io/base2/20.png', large: 'https://images.pokemontcg.io/base2/20_hires.png' }},
-  { id: 'base4-4',  name: 'Dragonite',  hp: 100, images: { small: 'https://images.pokemontcg.io/base4/4.png',  large: 'https://images.pokemontcg.io/base4/4_hires.png'  }},
-  { id: 'base1-7',  name: 'Hitmonchan', hp:  70, images: { small: 'https://images.pokemontcg.io/base1/7.png',  large: 'https://images.pokemontcg.io/base1/7_hires.png'  }},
-  { id: 'base1-3',  name: 'Chansey',    hp: 120, images: { small: 'https://images.pokemontcg.io/base1/3.png',  large: 'https://images.pokemontcg.io/base1/3_hires.png'  }},
-  { id: 'base1-1',  name: 'Alakazam',   hp:  80, images: { small: 'https://images.pokemontcg.io/base1/1.png',  large: 'https://images.pokemontcg.io/base1/1_hires.png'  }},
-  { id: 'base1-6',  name: 'Gyarados',   hp: 100, images: { small: 'https://images.pokemontcg.io/base1/6.png',  large: 'https://images.pokemontcg.io/base1/6_hires.png'  }},
-  { id: 'base1-26', name: 'Dratini',    hp:  40, images: { small: 'https://images.pokemontcg.io/base1/26.png', large: 'https://images.pokemontcg.io/base1/26_hires.png' }},
-  { id: 'base1-56', name: 'Onix',       hp:  90, images: { small: 'https://images.pokemontcg.io/base1/56.png', large: 'https://images.pokemontcg.io/base1/56_hires.png' }},
-  { id: 'base1-54', name: 'Jigglypuff', hp:  60, images: { small: 'https://images.pokemontcg.io/base1/54.png', large: 'https://images.pokemontcg.io/base1/54_hires.png' }},
+  { id: 'base1-4',  name: 'Charizard',  hp: 120, images: { small: 'https://images.pokemontcg.io/base1/4.png',  large: 'https://images.pokemontcg.io/base1/4_hires.png'  }, types: ['Fire'],      rarity: 'Holo Rare' },
+  { id: 'base1-2',  name: 'Blastoise',  hp: 100, images: { small: 'https://images.pokemontcg.io/base1/2.png',  large: 'https://images.pokemontcg.io/base1/2_hires.png'  }, types: ['Water'],     rarity: 'Holo Rare' },
+  { id: 'base1-15', name: 'Venusaur',   hp: 100, images: { small: 'https://images.pokemontcg.io/base1/15.png', large: 'https://images.pokemontcg.io/base1/15_hires.png' }, types: ['Grass'],     rarity: 'Holo Rare' },
+  { id: 'base1-58', name: 'Pikachu',    hp:  40, images: { small: 'https://images.pokemontcg.io/base1/58.png', large: 'https://images.pokemontcg.io/base1/58_hires.png' }, types: ['Lightning'], rarity: 'Common' },
+  { id: 'base1-10', name: 'Mewtwo',     hp:  60, images: { small: 'https://images.pokemontcg.io/base1/10.png', large: 'https://images.pokemontcg.io/base1/10_hires.png' }, types: ['Psychic'],   rarity: 'Rare Holo' },
+  { id: 'base1-8',  name: 'Machamp',    hp: 100, images: { small: 'https://images.pokemontcg.io/base1/8.png',  large: 'https://images.pokemontcg.io/base1/8_hires.png'  }, types: ['Fighting'],  rarity: 'Holo Rare' },
+  { id: 'base2-20', name: 'Gengar',     hp:  80, images: { small: 'https://images.pokemontcg.io/base2/20.png', large: 'https://images.pokemontcg.io/base2/20_hires.png' }, types: ['Psychic'],   rarity: 'Rare' },
+  { id: 'base4-4',  name: 'Dragonite',  hp: 100, images: { small: 'https://images.pokemontcg.io/base4/4.png',  large: 'https://images.pokemontcg.io/base4/4_hires.png'  }, types: ['Colorless'], rarity: 'Rare Holo' },
+  { id: 'base1-7',  name: 'Hitmonchan', hp:  70, images: { small: 'https://images.pokemontcg.io/base1/7.png',  large: 'https://images.pokemontcg.io/base1/7_hires.png'  }, types: ['Fighting'],  rarity: 'Uncommon' },
+  { id: 'base1-3',  name: 'Chansey',    hp: 120, images: { small: 'https://images.pokemontcg.io/base1/3.png',  large: 'https://images.pokemontcg.io/base1/3_hires.png'  }, types: ['Colorless'], rarity: 'Uncommon' },
+  { id: 'base1-1',  name: 'Alakazam',   hp:  80, images: { small: 'https://images.pokemontcg.io/base1/1.png',  large: 'https://images.pokemontcg.io/base1/1_hires.png'  }, types: ['Psychic'],   rarity: 'Holo Rare' },
+  { id: 'base1-6',  name: 'Gyarados',   hp: 100, images: { small: 'https://images.pokemontcg.io/base1/6.png',  large: 'https://images.pokemontcg.io/base1/6_hires.png'  }, types: ['Water'],     rarity: 'Holo Rare' },
+  { id: 'base1-26', name: 'Dratini',    hp:  40, images: { small: 'https://images.pokemontcg.io/base1/26.png', large: 'https://images.pokemontcg.io/base1/26_hires.png' }, types: ['Colorless'], rarity: 'Common' },
+  { id: 'base1-56', name: 'Onix',       hp:  90, images: { small: 'https://images.pokemontcg.io/base1/56.png', large: 'https://images.pokemontcg.io/base1/56_hires.png' }, types: ['Fighting'],  rarity: 'Uncommon' },
+  { id: 'base1-54', name: 'Jigglypuff', hp:  60, images: { small: 'https://images.pokemontcg.io/base1/54.png', large: 'https://images.pokemontcg.io/base1/54_hires.png' }, types: ['Colorless'], rarity: 'Common' },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -488,7 +500,14 @@ function App() {
           if (!c.hp || parseInt(c.hp) <= 0 || !c.images?.small) continue;
           if (seenIds.has(c.id)) continue;
           seenIds.add(c.id);
-          valid.push({ id: c.id, name: c.name, hp: parseInt(c.hp), images: c.images });
+          valid.push({
+            id: c.id,
+            name: c.name,
+            hp: parseInt(c.hp),
+            images: c.images,
+            types: c.types ?? [],
+            rarity: c.rarity ?? 'Common',
+          });
         }
         if (valid.length < 20) throw new Error('Too few cards');
         saveCardCache(valid);
@@ -919,7 +938,7 @@ function App() {
             </div>
             <div className="hand">
               {dealerHand.map((card, idx) => (
-                <div key={card.id + idx} className="card"
+                <div key={card.id + idx} className={`card${card.rarity && (card.rarity.includes('Holo') || card.rarity.includes('Secret')) ? ' holo' : ''}`}
                   style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
                   {gameState === 'playing' && idx === 2 ? (
                     <div className="card-back">
@@ -927,6 +946,20 @@ function App() {
                     </div>
                   ) : (
                     <>
+                      <div className="card-top-bar">
+                        <div className="card-types">
+                          {card.types?.map(t => (
+                            <span key={t} className={`type-icon type-${t.toLowerCase()}`} title={t}>
+                              {t[0]}
+                            </span>
+                          ))}
+                        </div>
+                        {card.rarity && (
+                          <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
+                            {card.rarity}
+                          </span>
+                        )}
+                      </div>
                       <img src={card.images.small} alt={card.name} className="card-image" />
                       <span className={`card-hp${card.hp <= 60 ? ' hp-low' : card.hp <= 120 ? ' hp-mid' : ' hp-high'}`}>{card.hp} HP</span>
                     </>
@@ -948,7 +981,7 @@ function App() {
                 return (
                   <div
                     key={card.id + idx}
-                    className={`card${isDexPending ? ' dex-eligible' : ''}`}
+                    className={`card${isDexPending ? ' dex-eligible' : ''}${card.rarity && (card.rarity.includes('Holo') || card.rarity.includes('Secret')) ? ' holo' : ''}`}
                     onClick={(e) => {
                       if (!isDexPending) return;
                       const cardRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -966,6 +999,20 @@ function App() {
                     }}
                     style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
                   >
+                    <div className="card-top-bar">
+                      <div className="card-types">
+                        {card.types?.map(t => (
+                          <span key={t} className={`type-icon type-${t.toLowerCase()}`} title={t}>
+                            {t[0]}
+                          </span>
+                        ))}
+                      </div>
+                      {card.rarity && (
+                        <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
+                          {card.rarity}
+                        </span>
+                      )}
+                    </div>
                     <img src={card.images.small} alt={card.name} className="card-image" />
                     <span className={`card-hp${card.hp <= 60 ? ' hp-low' : card.hp <= 120 ? ' hp-mid' : ' hp-high'}`}>{card.hp} HP</span>
                     {isDexPending && <span className="dex-capture-badge">+ DEX</span>}
