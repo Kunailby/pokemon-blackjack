@@ -83,6 +83,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    // Global leaderboard — any authenticated player can read and write
+    match /global/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
   }
 }
 ```

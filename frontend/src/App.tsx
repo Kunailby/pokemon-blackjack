@@ -159,7 +159,7 @@ function getHoloEffect(rarity: string): string {
 
 // ── Firebase imports ──────────────────────────────────────────────────────────
 import { auth } from './firebase';
-import { login as firebaseLogin, logout as firebaseLogout, subscribeToUserData, updateUserData, getUserData } from './services/firebaseAuth';
+import { login as firebaseLogin, logout as firebaseLogout, subscribeToUserData, updateUserData, getUserData, subscribeToGlobalHof, addToGlobalHof } from './services/firebaseAuth';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const BONUS_MS = 24 * 60 * 60 * 1000;
@@ -378,13 +378,12 @@ function App() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Global HoF — loaded from localStorage (shared across accounts) ────────
+  // ── Global HoF — real-time Firestore subscription (all players, weekly reset) ─
   useEffect(() => {
-    try {
-      const cached = JSON.parse(localStorage.getItem('pkmbkj-hof') ?? '[]');
-      setHallOfFame(cached);
-    } catch { /* ignore */ }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!currentUser) return;
+    const unsub = subscribeToGlobalHof(entries => setHallOfFame(entries));
+    return () => unsub();
+  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync game state to Firestore on every change ──────────────────────────
   useEffect(() => {
@@ -403,9 +402,10 @@ function App() {
       .catch(() => { /* silent — localStorage is the fallback */ });
   }, [chips, lastDailyBonus, dex, personalHof, seenPokemon, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Re-fetch missing sprites for HoF entries on mount ────────────────────
+  // ── Re-fetch missing sprites for HoF entries when board updates ─────────
   useEffect(() => {
     if (hallOfFame.length === 0) return;
+    if (hallOfFame.every(e => e.sprites.every(s => s))) return; // all present
     const refetch = async () => {
       const entries = hallOfFame.map(e => ({ ...e, sprites: [...e.sprites] }));
       let changed = false;
@@ -419,13 +419,10 @@ function App() {
           }
         }
       }
-      if (changed) {
-        setHallOfFame(entries);
-        localStorage.setItem('pkmbkj-hof', JSON.stringify(entries));
-      }
+      if (changed) setHallOfFame(entries);
     };
     refetch();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hallOfFame.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Persist shoe on every deck change (prevents refresh abuse) ──────────
   useEffect(() => {
@@ -725,12 +722,8 @@ function App() {
           sprites,
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         };
-        // Global HoF — saved locally (shared across accounts on this device)
-        setHallOfFame(prev => {
-          const updated = [...prev, entry].sort((a, b) => b.bet - a.bet || Number(b.id) - Number(a.id)).slice(0, 10);
-          localStorage.setItem('pkmbkj-hof', JSON.stringify(updated));
-          return updated;
-        });
+        // Global HoF — write to Firestore; subscription updates local state
+        addToGlobalHof(entry).catch(() => {});
         // Personal HoF (via state → triggers sync effect)
         setPersonalHof(prev => [...prev, entry].sort((a, b) => b.bet - a.bet || Number(b.id) - Number(a.id)).slice(0, 10));
       };

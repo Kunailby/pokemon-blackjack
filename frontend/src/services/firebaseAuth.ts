@@ -5,7 +5,7 @@ import {
   User as FirebaseUser,
   updateProfile,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, runTransaction, Unsubscribe } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { HallOfFameEntry } from '../HofPage';
 import { DexEntry } from '../DexPage';
@@ -113,4 +113,59 @@ export async function updateLastDailyBonus(uid: string, lastDailyBonus: string):
 
 export async function updateSeenPokemon(uid: string, seenPokemon: string[]): Promise<void> {
   await updateDoc(doc(db, 'users', uid), { seenPokemon });
+}
+
+// ── Global Hall of Fame (Firestore — synced across all players) ───────────────
+// Stored at: global/hallOfFame
+// Resets every Monday: if the stored weekStart differs from the current Monday,
+// the board is treated as empty and the next write starts a fresh week.
+
+interface GlobalHofDoc {
+  entries: HallOfFameEntry[];
+  weekStart: string; // "YYYY-MM-DD" of the Monday this leaderboard started
+}
+
+/** Returns the ISO date string (YYYY-MM-DD) for the most recent Monday (UTC). */
+function getCurrentMondayKey(): string {
+  const d = new Date();
+  const day = d.getUTCDay(); // 0 = Sunday, 1 = Monday … 6 = Saturday
+  const daysToMonday = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + daysToMonday);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Subscribe to the global leaderboard in real time.
+ * Automatically returns an empty array when the stored week differs
+ * from the current week (the board resets on the next win write).
+ */
+export function subscribeToGlobalHof(callback: (entries: HallOfFameEntry[]) => void): Unsubscribe {
+  return onSnapshot(doc(db, 'global', 'hallOfFame'), (snap) => {
+    if (!snap.exists()) { callback([]); return; }
+    const data = snap.data() as GlobalHofDoc;
+    callback(data.weekStart === getCurrentMondayKey() ? (data.entries ?? []) : []);
+  });
+}
+
+/**
+ * Atomically add a new entry to the global leaderboard.
+ * Resets the board if it belongs to a previous week.
+ * Keeps only the top 10 entries sorted by bet (desc), then recency.
+ */
+export async function addToGlobalHof(entry: HallOfFameEntry): Promise<void> {
+  const ref = doc(db, 'global', 'hallOfFame');
+  const currentWeek = getCurrentMondayKey();
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    let existing: HallOfFameEntry[] = [];
+    if (snap.exists()) {
+      const data = snap.data() as GlobalHofDoc;
+      // Only carry over entries from the current week; older weeks reset
+      existing = data.weekStart === currentWeek ? (data.entries ?? []) : [];
+    }
+    const updated = [...existing, entry]
+      .sort((a, b) => b.bet - a.bet || Number(b.id) - Number(a.id))
+      .slice(0, 10);
+    tx.set(ref, { entries: updated, weekStart: currentWeek } satisfies GlobalHofDoc);
+  });
 }
