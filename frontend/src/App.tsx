@@ -310,7 +310,7 @@ function App() {
   // Auto-dismiss achievement toast after 4 seconds
   useEffect(() => {
     if (newAchievements.length === 0) return;
-    const t = setTimeout(() => setNewAchievements([]), 4000);
+    const t = setTimeout(() => setNewAchievements([]), 3900);
     return () => clearTimeout(t);
   }, [newAchievements]);
 
