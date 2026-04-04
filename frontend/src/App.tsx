@@ -962,14 +962,6 @@ function App() {
                     ? '🎴 Dex capture unlocked'
                     : `Bet $${Math.ceil(chips * 0.1)}+ to unlock Dex capture`}
                 </p>
-                <div className="bet-summary">
-                  <span className="bet-display">
-                    {bet > 0
-                      ? <>Wager: <strong>${bet}</strong></>
-                      : <span className="bet-empty">No wager yet</span>}
-                  </span>
-                  {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
-                </div>
                 <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>
                   Deal
                 </button>
