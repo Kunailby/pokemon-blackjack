@@ -112,7 +112,8 @@ async function fetchAllSpecies(): Promise<string[]> {
 export default function DexPage({ dex, seen, onBack }: DexPageProps) {
   const [tab, setTab] = useState<Tab>('seen');
   const [species, setSpecies] = useState<string[]>([]);
-  const [sprites, setSprites] = useState<Map<string, string>>(new Map());
+  // Seed from persistent cache so already-fetched sprites show instantly
+  const [sprites, setSprites] = useState<Map<string, string>>(() => new Map(spriteCache));
 
   const caughtSet = new Set(dex.map(d => d.name));
   const seenSet = new Set(seen);

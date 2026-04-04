@@ -1474,7 +1474,7 @@ button:focus-visible,
   .controls-panel { padding: 18px 16px; }
 
   /* 2 columns on mobile so cards are large enough to read */
-  .hand { gap: 8px; grid-template-columns: repeat(2, 1fr); }
+  .hand { gap: 8px; grid-template-columns: repeat(3, 1fr); }
   .card-hp { font-size: 0.8rem; }
 
   .play-buttons { gap: 10px; }
