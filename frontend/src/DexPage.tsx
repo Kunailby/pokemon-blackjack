@@ -67,7 +67,7 @@ async function fetchAllSpecies(): Promise<string[]> {
         .replace(/-f$/, '♀')
         .replace(/-m$/, '♂')
         .replace(/-/g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase());
+        .replace(/\b\w/g, (c: string) => c.toUpperCase());
     });
   } catch {
     return [];
