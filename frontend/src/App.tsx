@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import pokedexIcon from '../img/pokedex.png';
+import pokedexIcon from './assets/pokedex.png';
 import './App.css';
 import { playCardDeal, playShuffle, playWin, playLose, playBust } from './sounds';
 import HofPage, { HallOfFameEntry } from './HofPage';
