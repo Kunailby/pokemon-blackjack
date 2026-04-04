@@ -74,9 +74,13 @@ function saveUsers(users: UserStore): void {
 }
 
 // ── Card cache (6-hour TTL) ───────────────────────────────────────────────────
+// ─── Card cache ──────────────────────────────────────────────────────────────
+const CARD_CACHE_VERSION = 3; // Bump when adding new fields (types/rarity)
+const CARD_CACHE_KEY = 'pkmbkj-cards-v' + CARD_CACHE_VERSION;
+
 function loadCardCache(): PokemonCard[] | null {
   try {
-    const raw = localStorage.getItem('pkmbkj-cards');
+    const raw = localStorage.getItem(CARD_CACHE_KEY);
     if (!raw) return null;
     const { cards, fetchedAt } = JSON.parse(raw);
     if (Date.now() - fetchedAt > 6 * 60 * 60 * 1000) return null; // stale
@@ -85,9 +89,18 @@ function loadCardCache(): PokemonCard[] | null {
 }
 
 function saveCardCache(cards: PokemonCard[]): void {
-  try { localStorage.setItem('pkmbkj-cards', JSON.stringify({ cards, fetchedAt: Date.now() })); }
+  try { localStorage.setItem(CARD_CACHE_KEY, JSON.stringify({ cards, fetchedAt: Date.now() })); }
   catch { /* quota exceeded — skip */ }
 }
+
+// Clean old card cache versions
+(function cleanOldCardCaches() {
+  try {
+    for (let i = 1; i < CARD_CACHE_VERSION; i++) {
+      localStorage.removeItem('pkmbkj-cards-v' + i);
+    }
+  } catch { /* ignore */ }
+})();
 
 // ── Shoe cache (persisted across refreshes) ───────────────────────────────────
 function loadShoeCache(): PokemonCard[] | null {
@@ -108,11 +121,10 @@ function saveShoeCache(shoe: PokemonCard[]): void {
 }
 
 // ── Rarity helper ─────────────────────────────────────────────────────────────
-// The TCG API's `rarity` field indicates the card's rarity tier, NOT whether
-// the specific image is holographic. Cards with "Rare Holo" rarity exist in
-// holographic variants, but the API always returns flat card scans. We show
-// the rarity badge accurately but do NOT apply holo shimmer effects since
-// we cannot reliably determine which images are actually holographic.
+// The TCG API's `rarity` field indicates the card's rarity tier.
+// We use it to apply appropriate visual effects:
+// - Basic holo cards get a gold shimmer
+// - Special/exalted holos (GX, V, VMAX, Full Art, Secret) get a rainbow shimmer
 function getRarityClass(rarity: string): string {
   const r = rarity.toLowerCase();
   if (r.includes('secret') || r.includes('promo')) return 'secret';
@@ -120,6 +132,22 @@ function getRarityClass(rarity: string): string {
   if (r.includes('rare')) return 'rare';
   if (r.includes('uncommon')) return 'uncommon';
   return 'common';
+}
+
+// Determine shimmer type for the card visual effect
+// Returns: 'rainbow' for special holos, 'gold' for basic holos, '' for non-holo
+function getHoloEffect(rarity: string): string {
+  const r = rarity.toLowerCase();
+  // Special/exalted holos: GX, V, VMAX, VSTAR, Full Art, Secret, Radiant, Ultra Rare
+  if (r.includes('gx') || r.includes('vmax') || r.includes('vstar') || r.includes('v-union') ||
+      r.includes('full art') || r.includes('secret') || r.includes('ultra rare') || r.includes('radiant')) {
+    return 'rainbow';
+  }
+  // Basic holo rares
+  if (r.includes('holo')) {
+    return 'gold';
+  }
+  return '';
 }
 
 // ── Firebase imports ──────────────────────────────────────────────────────────
@@ -946,7 +974,7 @@ function App() {
             </div>
             <div className="hand">
               {dealerHand.map((card, idx) => (
-                <div key={card.id + idx} className="card"
+                <div key={card.id + idx} className={`card${getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}`}
                   style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
                   {gameState === 'playing' && idx === 2 ? (
                     <div className="card-back">
@@ -989,7 +1017,7 @@ function App() {
                 return (
                   <div
                     key={card.id + idx}
-                    className={`card${isDexPending ? ' dex-eligible' : ''}`}
+                    className={`card${isDexPending ? ' dex-eligible' : ''}${getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}`}
                     onClick={(e) => {
                       if (!isDexPending) return;
                       const cardRect = (e.currentTarget as HTMLElement).getBoundingClientRect();

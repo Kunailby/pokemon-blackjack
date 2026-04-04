@@ -989,6 +989,82 @@ button:focus-visible,
   50% { background-position: 100% 50%; }
 }
 
+/* ─── Holo card shimmer effects ───────────────────────────────────────────── */
+.card.holo-gold,
+.card.holo-rainbow {
+  position: relative;
+  overflow: hidden;
+}
+
+.card.holo-gold {
+  border: 2px solid rgba(255, 215, 0, 0.5);
+}
+
+.card.holo-rainbow {
+  border: 2px solid rgba(255, 100, 255, 0.5);
+}
+
+.card.holo-gold::before,
+.card.holo-rainbow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  border-radius: 12px;
+}
+
+/* Gold shimmer for basic Rare Holo cards */
+.card.holo-gold::before {
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 215, 0, 0.08) 45%,
+    rgba(255, 215, 0, 0.18) 50%,
+    rgba(255, 215, 0, 0.08) 55%,
+    transparent 60%
+  );
+  background-size: 200% 100%;
+  animation: card-gold-shimmer 4s ease-in-out infinite;
+}
+
+@keyframes card-gold-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Rainbow shimmer for EX/GX/V/Full Art/Secret cards */
+.card.holo-rainbow::before {
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 0, 0, 0.06) 40%,
+    rgba(255, 165, 0, 0.08) 43%,
+    rgba(255, 255, 0, 0.06) 46%,
+    rgba(0, 255, 0, 0.08) 49%,
+    rgba(0, 100, 255, 0.06) 52%,
+    rgba(128, 0, 255, 0.08) 55%,
+    rgba(255, 0, 128, 0.06) 58%,
+    transparent 65%
+  );
+  background-size: 200% 100%;
+  animation: card-rainbow-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes card-rainbow-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Hover boost for holo cards */
+.card.holo-gold:hover {
+  box-shadow: 0 12px 40px rgba(255, 215, 0, 0.3);
+}
+
+.card.holo-rainbow:hover {
+  box-shadow: 0 12px 40px rgba(255, 100, 255, 0.3);
+}
+
 .card-hp {
   position: absolute;
   bottom: 6px;
