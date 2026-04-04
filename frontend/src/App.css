@@ -1492,7 +1492,7 @@ button:focus-visible,
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
-  background: linear-gradient(135deg, rgba(20,20,40,0.98) 0%, rgba(30,25,10,0.98) 100%);
+  background: #1a1830;
   border: 1px solid rgba(255, 215, 0, 0.6);
   border-radius: 16px;
   padding: 14px 22px;
