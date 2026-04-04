@@ -156,7 +156,12 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
     if (seenSet.size > 0) loadSprites();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps — only run once on mount
 
-  const caughtEntries = dex.sort((a, b) => a.name.localeCompare(b.name));
+  // Build a deduplicated caught list with counts
+  const caughtCountMap = new Map<string, number>();
+  dex.forEach(d => caughtCountMap.set(d.name, (caughtCountMap.get(d.name) ?? 0) + 1));
+  const caughtEntries = Array.from(
+    new Map(dex.map(d => [d.name, d])).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   // Master list: all known species, or fallback to seen+caught names
   const masterList = species.length > 0 ? species : Array.from(seenSet).sort();
@@ -211,6 +216,9 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
                     {isCaught && (
                       <span className="dex-caught-badge">
                         <img src={pokeballIcon} alt="caught" className="pokeball-mini" />
+                        {(caughtCountMap.get(name) ?? 1) > 1 && (
+                          <span className="dex-count-badge">×{caughtCountMap.get(name)}</span>
+                        )}
                       </span>
                     )}
                   </div>
@@ -238,15 +246,19 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
             </div>
           ) : (
             <div className="dex-grid">
-              {caughtEntries.map(entry => (
-                <div key={entry.name} className="dex-card caught">
-                  {entry.sprite
-                    ? <img src={entry.sprite} alt={entry.name} className="dex-sprite" />
-                    : <div className="dex-sprite-placeholder">?</div>
-                  }
-                  <span className="dex-name">{entry.name}</span>
-                </div>
-              ))}
+              {caughtEntries.map(entry => {
+                const count = caughtCountMap.get(entry.name) ?? 1;
+                return (
+                  <div key={entry.name} className="dex-card caught">
+                    {entry.sprite
+                      ? <img src={entry.sprite} alt={entry.name} className="dex-sprite" />
+                      : <div className="dex-sprite-placeholder">?</div>
+                    }
+                    <span className="dex-name">{entry.name}</span>
+                    {count > 1 && <span className="dex-count-badge">×{count}</span>}
+                  </div>
+                );
+              })}
             </div>
           )
         )}
