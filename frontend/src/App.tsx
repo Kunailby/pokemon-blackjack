@@ -226,6 +226,12 @@ async function fetchPokemonSprite(cardName: string): Promise<string> {
     .replace(/^(Team\s+\w+'s|\w+'s|Dark|Light|Gym|M\s)\s*/i, '')
     .trim();
 
+  // PokeAPI lists Deoxys only as "deoxys-normal", never plain "deoxys"
+  if (normalized.toLowerCase() === 'deoxys') {
+    const sprite = await tryFetchSprite('deoxys-normal');
+    if (sprite) return sprite;
+  }
+
   // Strategy 1 (preferred): scan all sub-phrases of the normalized name and
   // find one that exactly matches a known Pokémon slug.
   // e.g. "Team Aqua's Kyogre ex" → normalized "Kyogre" → slug "kyogre" → hit!
