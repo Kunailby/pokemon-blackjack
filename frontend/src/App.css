@@ -1468,9 +1468,15 @@ button:focus-visible,
   .panel { padding: 18px 16px; }
   .controls-panel { padding: 18px 16px; }
 
-  .hand { gap: 8px; }
+  /* 2 columns on mobile so cards are large enough to read */
+  .hand { gap: 8px; grid-template-columns: repeat(2, 1fr); }
   .card-hp { font-size: 0.8rem; }
 
   .play-buttons { gap: 10px; }
   .btn-primary { padding: 12px 28px; font-size: 0.82rem; }
+}
+
+.dex-picks-left {
+  font-weight: 700;
+  color: var(--accent);
 }
