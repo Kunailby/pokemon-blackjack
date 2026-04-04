@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import pokedexIcon from '../img/pokedex.png';
 import './App.css';
 import { playCardDeal, playShuffle, playWin, playLose, playBust } from './sounds';
 import HofPage, { HallOfFameEntry } from './HofPage';
@@ -827,8 +828,8 @@ function App() {
             <button className="nav-icon-btn" onClick={() => setPage('hof')} title="Hall of Fame">
               🏆
             </button>
-            <button ref={dexBtnRef} className="nav-icon-btn" onClick={() => setPage('dex')} title="My Pokédex">
-              📖
+            <button ref={dexBtnRef} className="nav-icon-btn nav-icon-img" onClick={() => setPage('dex')} title="My Pokédex">
+              <img src={pokedexIcon} alt="Pokédex" />
               {dex.length > 0 && <span className="nav-badge">{dex.length}</span>}
             </button>
           </div>
