@@ -631,10 +631,17 @@ function App() {
     setPendingDexCards([]);
     setMessageType('');
 
-    if (calculateTotal([p1, p2]) === 400) {
+    const initialTotal = calculateTotal([p1, p2]);
+    if (initialTotal === 400) {
       setMessage('BLACKJACK! Perfect 400 HP!');
       setDexPicksLeft(2); // blackjack wins get 2 dex picks
       setGameState('dealer-turn'); // immediate — no Hit/Stand window after blackjack
+    } else if (initialTotal > 400) {
+      // Two high-HP cards (e.g. two VMAX) can bust on the initial deal
+      setTimeout(() => playBust(), 120);
+      setMessage(`Overkill! Busted on the deal at ${initialTotal} HP!`);
+      setMessageType('bust');
+      setGameState('game-over');
     } else {
       setMessage('');
       setGameState('playing');
