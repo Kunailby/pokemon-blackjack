@@ -43,36 +43,49 @@ Pokemon Blackjack is a card game that combines Blackjack mechanics with Pokemon 
 
 > ⚠️ **Backend note:** `backend/src/services/GameLogic.ts` is **legacy code** and does not reflect current frontend rules. Specifically, the backend treats a dealer total of exactly 400 as a "dealer blackjack" that beats non-400 player hands — the frontend does not. Always use `frontend/src/App.tsx` as the authoritative rules reference.
 
-**Current state:** The frontend is a React app with a backend (Express + MongoDB) that serves as the **authoritative data source** for authenticated accounts.
+**Current state:** The frontend is a React app using **Firebase (Auth + Firestore)** for authentication and cross-device data sync. No backend server is required.
 
 ---
 
 ## Account & Data Architecture
 
+### Firebase Setup
+
+The app uses **Firebase Authentication** and **Cloud Firestore** for persistent, cross-device accounts.
+
+- **Auth method:** Email/password (username is mapped to `{username}@pokemon-blackjack.local` internally)
+- **Data storage:** Each user's game data lives in `firestore/users/{uid}`
+- **Real-time sync:** `onSnapshot` listeners push updates to all devices instantly
+- **Offline fallback:** `localStorage` caches data for offline play; syncs when back online
+
 ### Authentication Flow
 
-1. **Backend is the single source of truth** — when a user logs in, `POST /auth/login` creates or fetches the account from MongoDB
-2. **Username is the global unique identifier** — the same username always resolves to the same MongoDB document, regardless of device
-3. **localStorage is only an offline cache** — if the backend is unreachable AND the user has previously logged in on this device, the local cache is used. Otherwise, login fails with a connection error
-4. **Silent account creation is prevented** — if a username doesn't exist on the backend and isn't in localStorage, the user sees "Could not connect to server" instead of creating a duplicate account
+1. **Login:** `firebaseLogin(username, password)` → Firebase Auth signs in or creates account
+2. **New account:** Auto-created with 1000 chips, empty dex, empty HoF
+3. **Existing account:** Data loaded from Firestore via `subscribeToUserData(uid)` listener
+4. **Session restore:** `onAuthStateChanged` fires on page load — restores session automatically
+5. **Logout:** `firebaseLogout()` clears Firebase session + local state
 
 ### Data Sync
 
-- **On login:** Account data (chips, dex, personal HoF, daily bonus) comes from MongoDB
-- **On every state change:** `useEffect` syncs chips, dex, personalHof, and lastDailyBonus to the backend immediately (no debounce)
-- **On session restore:** If a JWT token exists, `GET /auth/profile` fetches fresh data from the backend
-- **On Dex sprite fetch:** Background sprite downloads sync to backend immediately
-- **localStorage** is updated as a local cache on every change, but is never the primary write target
+- **On every state change:** `useEffect` writes chips, dex, personalHof, lastDailyBonus to Firestore
+- **Real-time listener:** `onSnapshot` on `users/{uid}` pushes changes from other devices
+- **localStorage:** Used as offline cache only, never the authoritative source
 
-### Backend Auth Endpoints
+### Firestore Security Rules
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/auth/login` | Login or auto-create user; returns JWT + user data |
-| GET | `/auth/profile` | Get current user's data (requires JWT) |
-| PUT | `/auth/sync` | Update chips, dex, personalHof, lastDailyBonus |
-| POST | `/auth/hof` | Add entry to global Hall of Fame |
-| GET | `/auth/hof` | Get global Hall of Fame |
+Required rules for `firestore.rules`:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
 
 ---
 
