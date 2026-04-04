@@ -655,6 +655,12 @@ body::after {
   border-color: rgba(240, 112, 112, 0.3);
 }
 
+.panel-label .total-badge.perfect {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
 /* ─── Hand / Cards ──────────────────────────────────────────────────────────── */
 .hand {
   display: flex;

@@ -86,6 +86,21 @@ function saveCardCache(cards: PokemonCard[]): void {
   catch { /* quota exceeded — skip */ }
 }
 
+// ── Shoe cache (persisted across refreshes) ───────────────────────────────────
+function loadShoeCache(): PokemonCard[] | null {
+  try {
+    const raw = localStorage.getItem('pkmbkj-shoe');
+    if (!raw) return null;
+    const shoe = JSON.parse(raw) as PokemonCard[];
+    return shoe.length > 0 ? shoe : null;
+  } catch { return null; }
+}
+
+function saveShoeCache(shoe: PokemonCard[]): void {
+  try { localStorage.setItem('pkmbkj-shoe', JSON.stringify(shoe)); }
+  catch { /* quota exceeded — skip */ }
+}
+
 // ── Backend API helper ────────────────────────────────────────────────────────
 const API_BASE = 'https://pokemon-blackjack-28yc.onrender.com/api';
 
@@ -288,9 +303,12 @@ function App() {
   // ── Fetch global HoF on mount ─────────────────────────────────────────────
   useEffect(() => {
     apiCall('/auth/hof').then(data => {
-      if (data.entries?.length) setHallOfFame(data.entries);
-      else {
-        // Fallback to localStorage cache
+      if (data.entries?.length) {
+        setHallOfFame(data.entries);
+        // Cache globally so any account sees it on refresh even if backend is down
+        localStorage.setItem('pkmbkj-hof', JSON.stringify(data.entries));
+      } else {
+        // Fallback to localStorage cache (cross-account, accumulated locally)
         try { const cached = JSON.parse(localStorage.getItem('pkmbkj-hof') ?? '[]'); setHallOfFame(cached); }
         catch { /* ignore */ }
       }
@@ -346,6 +364,11 @@ function App() {
     };
     refetch();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Persist shoe on every deck change (prevents refresh abuse) ──────────
+  useEffect(() => {
+    if (deck.length > 0) saveShoeCache(deck);
+  }, [deck]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Re-fetch missing sprites for Dex entries ──────────────────────────────
   useEffect(() => {
@@ -467,7 +490,8 @@ function App() {
       const cached = loadCardCache();
       if (cached && cached.length >= 20) {
         setAllCards(cached);
-        setDeck(buildShoe(cached));
+        // Restore persisted shoe; only build a new one if none exists
+        setDeck(loadShoeCache() ?? buildShoe(cached));
         setMessage(loginBonusRef.current || 'Place your bet!');
         loginBonusRef.current = '';
         setGameState('betting');
@@ -505,10 +529,10 @@ function App() {
         if (valid.length < 20) throw new Error('Too few cards');
         saveCardCache(valid);
         setAllCards(valid);
-        setDeck(buildShoe(valid));
+        setDeck(loadShoeCache() ?? buildShoe(valid));
       } catch {
         setAllCards(FALLBACK_CARDS);
-        setDeck(buildShoe(FALLBACK_CARDS));
+        setDeck(loadShoeCache() ?? buildShoe(FALLBACK_CARDS));
       }
       setMessage(loginBonusRef.current || 'Place your bet!');
       loginBonusRef.current = '';
@@ -625,7 +649,12 @@ function App() {
         // Global HoF — push to backend; update local state from response
         if (tokenRef.current) {
           apiCall('/auth/hof', 'POST', { entry }, tokenRef.current)
-            .then(data => setHallOfFame(data.entries || []))
+            .then(data => {
+              const entries = data.entries || [];
+              setHallOfFame(entries);
+              // Cache globally so any account sees the full leaderboard on refresh
+              localStorage.setItem('pkmbkj-hof', JSON.stringify(entries));
+            })
             .catch(() => {
               // Backend unavailable — update locally
               setHallOfFame(prev => {
@@ -673,17 +702,18 @@ function App() {
 
       if (isWin) {
         saveWin(playerHand, bet);
-        // Check dex eligibility using ref (stable across closure)
-        if (isDexEligibleRef.current) {
-          // Find cards not yet in dex
-          const users = loadUsers();
-          const currentDex: DexEntry[] = users[currentUser]?.dex ?? [];
-          const eligible = playerHand.filter(c => !currentDex.some(d => d.name === c.name));
+        if (!isDexEligibleRef.current) {
+          // Bet was under 10% of chips — ineligible
+          setMessage(prev => prev + ' — Under Dex limit, cannot redeem reward.');
+        } else {
+          // Use dex state directly (avoids stale localStorage reads)
+          const eligible = playerHand.filter(c => !dex.some(d => d.name === c.name));
           if (eligible.length > 0) {
             setPendingDexCards(eligible);
             setGameState('dex-select');
             return;
           }
+          // All cards already caught — silently continue to game-over
         }
       }
 
@@ -810,7 +840,10 @@ function App() {
   }
 
   // ── Render: Game ──────────────────────────────────────────────────────────
-  const dealerTotal     = calculateTotal(dealerHand);
+  // Exclude the facedown card (index 2) from the displayed total during 'playing'
+  const dealerTotal     = gameState === 'playing'
+    ? calculateTotal(dealerHand.slice(0, 2))
+    : calculateTotal(dealerHand);
   const showDealerTotal = gameState !== 'betting';
 
   return (
@@ -913,7 +946,7 @@ function App() {
           <div className="panel">
             <div className="panel-label">
               Your Hand
-              <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}${displayedPlayerTotal >= 381 ? ' danger' : displayedPlayerTotal >= 320 ? ' caution' : ''}`}>{displayedPlayerTotal} HP</span>
+              <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}${displayedPlayerTotal === 400 ? ' perfect' : displayedPlayerTotal >= 381 ? ' danger' : displayedPlayerTotal >= 320 ? ' caution' : ''}`}>{displayedPlayerTotal} HP</span>
             </div>
             <div className="hand">
               {playerHand.map((card, idx) => {
