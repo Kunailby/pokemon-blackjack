@@ -948,7 +948,14 @@ function App() {
           <div className="controls-panel">
             {gameState === 'betting' && (
               <>
-                <span className="bet-label">Place your wager</span>
+                <div className="bet-summary">
+                  <span className="bet-display">
+                    {bet > 0
+                      ? <>Wager: <strong>${bet}</strong></>
+                      : <span className="bet-empty">No wager yet</span>}
+                  </span>
+                  {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
+                </div>
                 <div className="bet-row">
                   {[10, 25, 50, 100].map(amount => (
                     <button key={amount} className="chip-btn"
@@ -959,7 +966,7 @@ function App() {
                 </div>
                 <p className="dex-threshold-hint">
                   {bet >= chips * 0.1
-                    ? '🎴 Dex capture unlocked'
+                    ? <span className="dex-unlocked">🎴 Dex capture unlocked</span>
                     : `Bet $${Math.ceil(chips * 0.1)}+ to unlock Dex capture`}
                 </p>
                 <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>

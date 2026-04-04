@@ -691,6 +691,10 @@ body::after {
 .dex-threshold-hint:has(.dex-hint), .dex-threshold-hint {
   color: var(--text-secondary);
 }
+.dex-unlocked {
+  color: #22c55e;
+  font-weight: 600;
+}
 
 /* ─── Focus-visible ring on all interactive elements ────────────────────────── */
 button:focus-visible,
