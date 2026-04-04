@@ -75,7 +75,7 @@ function saveUsers(users: UserStore): void {
 
 // ── Card cache (6-hour TTL) ───────────────────────────────────────────────────
 // ─── Card cache ──────────────────────────────────────────────────────────────
-const CARD_CACHE_VERSION = 3; // Bump when adding new fields (types/rarity)
+const CARD_CACHE_VERSION = 4; // Bumped to force re-fetch with ID-based dedup + variety fix
 const CARD_CACHE_KEY = 'pkmbkj-cards-v' + CARD_CACHE_VERSION;
 
 function loadCardCache(): PokemonCard[] | null {
