@@ -479,7 +479,7 @@ function App() {
       } else if (canClaimBonus(startLastBonus)) {
         startChips += 100;
         startLastBonus = new Date().toISOString();
-        bonusMsg = 'Daily bonus — +$100 added to your stack!';
+        bonusMsg = 'Daily bonus! +$100 Pokédollars — ready to battle!';
         // Persist bonus claim immediately to Firestore
         await updateUserData(uid, { chips: startChips, lastDailyBonus: startLastBonus });
       }
@@ -611,7 +611,7 @@ function App() {
 
   // ── Start game ────────────────────────────────────────────────────────────
   const startGame = () => {
-    if (bet === 0) { setMessage('Set a wager before dealing.'); return; }
+    if (bet === 0) { setMessage('Place a bet first!'); return; }
 
     // Reset picks unconditionally so no stale value from a prior round leaks in
     setDexPicksLeft(0);
@@ -619,7 +619,7 @@ function App() {
     // Record dex eligibility: bet must be ≥ 10% of chips BEFORE deduction
     isDexEligibleRef.current = bet >= chips * 0.1;
 
-    const needsShuffle = deck.length < 15;
+    const needsShuffle = deck.length < 20;
     const newDeck = needsShuffle ? buildShoe(allCards) : [...deck];
     if (needsShuffle) playShuffle();
 
@@ -735,15 +735,6 @@ function App() {
         setPersonalHof(prev => [...prev, entry].sort((a, b) => b.bet - a.bet || Number(b.id) - Number(a.id)).slice(0, 10));
       };
 
-      // Guard: player already busted before dealer turn (shouldn't normally happen)
-      if (playerTotal > 400) {
-        playBust();
-        setMessage(`Overkill! You busted at ${playerTotal} HP!`);
-        setMessageType('bust');
-        setGameState('game-over');
-        return;
-      }
-
       const isWin = dealerTotal > 400 || playerTotal > dealerTotal;
 
       if (dealerTotal > 400) {
@@ -758,10 +749,10 @@ function App() {
         setChips(c => c + bet * 2);
       } else if (dealerTotal > playerTotal) {
         playLose();
-        setMessage('Gym Leader wins. Better luck next time.');
+        setMessage('Gym Leader wins! Train harder next time.');
         setMessageType('lose');
       } else {
-        setMessage("Standoff — it's a draw! Bet returned.");
+        setMessage("It's a tie! Bet returned.");
         setMessageType('push');
         setChips(c => c + bet);
       }
@@ -770,7 +761,7 @@ function App() {
         saveWin(playerHand, bet);
         if (!isDexEligibleRef.current) {
           // Bet was under 10% of chips — ineligible
-          setMessage(prev => prev + ' — Bet too small to unlock a Dex capture.');
+          setMessage(prev => prev + ' — Bet was too small for Dex eligibility.');
         } else {
           // Use dex state directly (avoids stale localStorage reads)
           const eligible = playerHand;
@@ -799,12 +790,14 @@ function App() {
   const addToDex = (card: PokemonCard) => {
     if (dexPicksLeft <= 0) return;
 
+    const newPicksLeft = dexPicksLeft - 1;
+
     const newEntry: DexEntry = { name: card.name, sprite: '' };
     const updatedDex = [...dex, newEntry];
     setDex(updatedDex);
     setNewCatchCount(prev => prev + 1);
     setPendingDexCards(prev => prev.filter(c => c.id !== card.id));
-    setDexPicksLeft(prev => prev - 1);
+    setDexPicksLeft(newPicksLeft);
 
     // Save immediately (without sprite), then update sprite in background
     const users = loadUsers();
@@ -825,14 +818,10 @@ function App() {
       });
     });
 
-    // Auto-exit dex-select when no picks left
-    // Use setTimeout to let the state update propagate
-    setTimeout(() => {
-      setDexPicksLeft(remaining => {
-        if (remaining <= 0) setGameState('game-over');
-        return remaining;
-      });
-    }, 100);
+    // Auto-exit dex-select when all picks used
+    if (newPicksLeft <= 0) {
+      setTimeout(() => setGameState('game-over'), 100);
+    }
   };
 
   // ── Collect daily bonus (from broke screen) ──────────────────────────────
@@ -841,7 +830,7 @@ function App() {
     const newBonus = new Date().toISOString();
     setChips(c => c + 100);
     setLastDailyBonus(newBonus);
-    setMessage('Daily bonus collected! +$100 — back in the game.');
+    setMessage('Daily bonus! +$100 Pokédollars — back in action!');
   };
 
   // ── Logout ────────────────────────────────────────────────────────────────
@@ -870,7 +859,7 @@ function App() {
     setPendingDexCards([]);
     setDexPicksLeft(0);
     setMessageType('');
-    setMessage(chips <= 0 ? '' : 'Place your wager!');
+    setMessage(chips <= 0 ? '' : 'Place your bet!');
     setGameState('betting');
   };
 
@@ -881,7 +870,7 @@ function App() {
         <div className="auth-container">
           <div className="auth-panel">
             <h1 className="auth-title">Pokémon <span>Blackjack</span></h1>
-            <p className="auth-subtitle">Sign in, or choose a name to join.</p>
+            <p className="auth-subtitle">Enter your Trainer name to begin your journey.</p>
             <form className="auth-form" onSubmit={handleAuth}>
               <div className="auth-field">
                 <label className="auth-label">Username</label>
@@ -897,10 +886,10 @@ function App() {
               </div>
               {authError && <p className="auth-error">{authError}</p>}
               <button className="btn-primary btn-deal auth-submit" type="submit" disabled={authLoading}>
-                {authLoading ? 'Entering…' : 'Play'}
+                {authLoading ? 'Loading…' : 'Play'}
               </button>
             </form>
-            <p className="auth-hint">No email needed — start with $1,000 and collect a $100 daily bonus.</p>
+            <p className="auth-hint">No email needed. New Trainers start with $1,000 Pokédollars and earn a $100 daily bonus.</p>
           </div>
         </div>
       </div>
@@ -995,11 +984,11 @@ function App() {
             <p className="broke-title">Blacked Out!</p>
             {canClaimBonus(lastDailyBonus) ? (
               <>
-                <p className="broke-subtitle">Your daily bonus is waiting!</p>
+                <p className="broke-subtitle">Your daily bonus is ready!</p>
                 <button className="btn-primary broke-btn" onClick={collectBonus}>Collect $100</button>
               </>
             ) : (
-              <p className="broke-subtitle">Next bonus in <strong>{bonusCountdown(lastDailyBonus)}</strong></p>
+              <p className="broke-subtitle">Daily bonus in <strong>{bonusCountdown(lastDailyBonus)}</strong></p>
             )}
           </div>
         )}
@@ -1098,8 +1087,8 @@ function App() {
                 <div className="bet-summary">
                   <span className="bet-display">
                     {bet > 0
-                      ? <>Wager: <strong>${bet}</strong></>
-                      : <span className="bet-empty">No wager yet</span>}
+                      ? <>Bet: <strong>${bet}</strong></>
+                      : <span className="bet-empty">No bet placed</span>}
                   </span>
                   {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
                 </div>
@@ -1137,13 +1126,13 @@ function App() {
               <>
                 <p className="dex-select-prompt">
                   {dexPicksLeft >= 2 ? (
-                    <>🎉 <strong>BLACKJACK BONUS!</strong> You can pick <span className="dex-select-highlight">2 cards</span> for your Pokédex!</>
+                    <>🎉 <strong>BLACKJACK BONUS!</strong> Pick <span className="dex-select-highlight">2 cards</span> for your Pokédex!</>
                   ) : (
-                    <>Tap a <span className="dex-select-highlight">glowing card</span> to register it in your Pokédex. <span className="dex-picks-left">({dexPicksLeft} pick{dexPicksLeft !== 1 ? 's' : ''} left)</span></>
+                    <>Pick a <span className="dex-select-highlight">glowing card</span> to add to your Pokédex. <span className="dex-picks-left">({dexPicksLeft} left)</span></>
                   )}
                 </p>
                 <button className="btn-primary btn-new-round" onClick={() => setGameState('game-over')}>
-                  Done
+                  Skip
                 </button>
               </>
             )}
