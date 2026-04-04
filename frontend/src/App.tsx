@@ -281,7 +281,7 @@ function App() {
         const dexData = data.dex ?? [];
         const seenData = data.seenPokemon ?? [];
         // Merge caught into seen
-        const caughtNames = new Set(dexData.map((d: DexEntry) => d.name));
+        const caughtNames = Array.from(new Set(dexData.map((d: DexEntry) => d.name)));
         const mergedSeen = Array.from(new Set([...seenData, ...caughtNames]));
         setChips(data.chips);
         setLastDailyBonus(data.lastDailyBonus ?? '');
@@ -296,7 +296,7 @@ function App() {
       const seenData = data.seenPokemon ?? [];
 
       // Migration: ensure all caught Pokemon are also in seen list
-      const caughtNames = new Set(dexData.map((d: DexEntry) => d.name));
+      const caughtNames = Array.from(new Set(dexData.map((d: DexEntry) => d.name)));
       const mergedSeen = Array.from(new Set([...seenData, ...caughtNames]));
       if (mergedSeen.length !== seenData.length) {
         updateUserData(uid, { seenPokemon: mergedSeen }).catch(() => {});
