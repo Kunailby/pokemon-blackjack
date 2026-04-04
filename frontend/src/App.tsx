@@ -75,7 +75,7 @@ function saveUsers(users: UserStore): void {
 
 // ── Card cache (6-hour TTL) ───────────────────────────────────────────────────
 // ─── Card cache ──────────────────────────────────────────────────────────────
-const CARD_CACHE_VERSION = 5; // Bumped: fix shoe cache versioning + random page distribution
+const CARD_CACHE_VERSION = 6; // Bumped: 15 pages, type tags hidden, rarity repositioned
 const CARD_CACHE_KEY = 'pkmbkj-cards-v' + CARD_CACHE_VERSION;
 
 function loadCardCache(): PokemonCard[] | null {
@@ -528,10 +528,10 @@ function App() {
         const totalCount: number = p1.totalCount ?? 2000;
         const maxPage = Math.max(2, Math.ceil(totalCount / 250));
 
-        // Pick 9 additional pages spread randomly across the full catalog (10 total)
+        // Pick 14 additional pages spread randomly across the full catalog (15 total = ~3750 cards)
         // Random distribution ensures different cards every session
         const picks = new Set<number>([1]);
-        const segments = 9;
+        const segments = 14;
         const segment = Math.max(1, Math.floor(maxPage / segments));
         for (let i = 0; i < segments; i++) {
           const base = i * segment + 2;
@@ -994,21 +994,12 @@ function App() {
                     </div>
                   ) : (
                     <>
-                      <div className="card-top-bar">
-                        <div className="card-types">
-                          {card.types?.map(t => (
-                            <span key={t} className={`type-icon type-${t.toLowerCase()}`} title={t}>
-                              {t[0]}
-                            </span>
-                          ))}
-                        </div>
-                        {card.rarity && (
-                          <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
-                            {card.rarity}
-                          </span>
-                        )}
-                      </div>
                       <img src={card.images.small} alt={card.name} className="card-image" />
+                      {card.rarity && (
+                        <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
+                          {card.rarity}
+                        </span>
+                      )}
                       <span className={`card-hp${card.hp <= 60 ? ' hp-low' : card.hp <= 120 ? ' hp-mid' : ' hp-high'}`}>{card.hp} HP</span>
                     </>
                   )}
@@ -1047,21 +1038,12 @@ function App() {
                     }}
                     style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
                   >
-                    <div className="card-top-bar">
-                      <div className="card-types">
-                        {card.types?.map(t => (
-                          <span key={t} className={`type-icon type-${t.toLowerCase()}`} title={t}>
-                            {t[0]}
-                          </span>
-                        ))}
-                      </div>
-                      {card.rarity && (
-                        <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
-                          {card.rarity}
-                        </span>
-                      )}
-                    </div>
                     <img src={card.images.small} alt={card.name} className="card-image" />
+                    {card.rarity && (
+                      <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
+                        {card.rarity}
+                      </span>
+                    )}
                     <span className={`card-hp${card.hp <= 60 ? ' hp-low' : card.hp <= 120 ? ' hp-mid' : ' hp-high'}`}>{card.hp} HP</span>
                     {isDexPending && <span className="dex-capture-badge">+ DEX</span>}
                   </div>

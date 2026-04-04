@@ -952,7 +952,11 @@ button:focus-visible,
 
 /* ─── Rarity badges ───────────────────────────────────────────────────────── */
 .rarity-badge {
-  font-size: 0.5rem;
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.45rem;
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 6px;
@@ -960,6 +964,8 @@ button:focus-visible,
   letter-spacing: 0.05em;
   white-space: nowrap;
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .rarity-common   { background: rgba(150,150,150,0.85); color: #fff; }
