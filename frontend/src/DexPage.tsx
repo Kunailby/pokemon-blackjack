@@ -16,7 +16,7 @@ type Tab = 'seen' | 'caught';
 
 // ─── Sprite cache with localStorage persistence ───────────────────────────────
 // Bump CACHE_VERSION when adding new Pokemon or fixing sprite issues
-const SPRITE_CACHE_VERSION = 2;
+const SPRITE_CACHE_VERSION = 3;
 const SPRITE_STORE_KEY = 'pkmbkj-sprite-cache-v' + SPRITE_CACHE_VERSION;
 
 function loadSpriteCache(): Map<string, string> {
@@ -53,37 +53,16 @@ async function fetchSprite(pokemonName: string): Promise<string> {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
 
+  // Strip hyphen-suffixes first (e.g. "Deoxys-EX" → "Deoxys", "Charizard-GX" → "Charizard")
+  // then space-suffixes, then prefixes like "Team Aqua's", "Dark", etc.
   let base = pokemonName
+    .replace(/-(ex|GX|VMAX|VSTAR|VUNION|BREAK)$/i, '')
     .replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|VUNION|BREAK|LV\.X|δ|\d+)(\s|$)/gi, ' ')
-    .replace(/^(Dark|Light|Team Rocket's|Rocket's|Gym|M\s)\s*/i, '')
+    .replace(/^(Team\s+\w+'s|\w+'s|Dark|Light|Gym|M\s)\s*/i, '')
     .trim();
 
-  // Deoxys: PokeAPI has deoxys-normal (not deoxys). Map explicitly.
-  if (base.toLowerCase() === 'deoxys') {
-    base = 'deoxys-normal';
-  }
-
-  // Nidoran ♀/♂ need special handling
-  if (base.toLowerCase().includes('nidoran')) {
-    const clean = toSlug(base);
-    const attempts = [clean, toSlug(pokemonName)];
-    for (const name of attempts) {
-      try {
-        const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.sprites?.front_default) {
-            spriteCache.set(pokemonName, data.sprites.front_default);
-            saveSpriteCache(spriteCache);
-            return data.sprites.front_default;
-          }
-        }
-      } catch { /* try next */ }
-    }
-    spriteCache.set(pokemonName, '');
-    saveSpriteCache(spriteCache);
-    return '';
-  }
+  // PokeAPI uses "deoxys-normal" not "deoxys"
+  if (base.toLowerCase() === 'deoxys') base = 'deoxys-normal';
 
   const attempts = [
     toSlug(base.split(' ')[0]),
@@ -105,7 +84,9 @@ async function fetchSprite(pokemonName: string): Promise<string> {
       }
     } catch { /* try next */ }
   }
-  // Don't cache empty results — retry on next attempt
+  // Cache failures too — prevents re-fetching every time the dex opens
+  spriteCache.set(pokemonName, '');
+  saveSpriteCache(spriteCache);
   return '';
 }
 
@@ -154,8 +135,8 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
       const needsFetch = Array.from(seenSet).filter(n => !spriteCache.has(n));
       if (needsFetch.length === 0) return;
 
-      // Batch into groups of 20 to avoid overwhelming the API
-      const batchSize = 20;
+      // Batch into groups of 50 — cached results resolve instantly, only uncached names hit the network
+      const batchSize = 50;
       for (let i = 0; i < needsFetch.length; i += batchSize) {
         const batch = needsFetch.slice(i, i + batchSize);
         const results = await Promise.all(
