@@ -96,11 +96,28 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'legendary_duel',   name: 'Legendary Duel',      description: 'Win with a card worth 250+ HP in your hand',        icon: '🏆' },
   { id: 'tiny_titan',       name: 'Tiny Titan',          description: 'Win with a card worth 30 HP or less in your hand',  icon: '🐣' },
 
-  // ── Dex ────────────────────────────────────────────────────────────────────
+  // ── Dex — unique species ───────────────────────────────────────────────────
   { id: 'first_catch',      name: 'First Catch!',        description: 'Add your first Pokémon to the Pokédex',             icon: '🎣' },
   { id: 'collector',        name: 'Collector',           description: 'Catch 10 unique Pokémon',                           icon: '📦' },
   { id: 'master_trainer',   name: 'Master Trainer',      description: 'Catch 25 unique Pokémon',                           icon: '📚' },
   { id: 'gotta_catch_em',   name: "Gotta Catch 'Em All", description: 'Catch 50 unique Pokémon',                           icon: '🏅' },
+
+  // ── Dex — total catches ────────────────────────────────────────────────────
+  { id: 'dex_150',   name: 'Card Hoarder',   description: 'Collect 150 Pokémon cards in your Pokédex',   icon: '📇' },
+  { id: 'dex_200',   name: 'Archivist',      description: 'Collect 200 Pokémon cards in your Pokédex',   icon: '🗂️' },
+  { id: 'dex_250',   name: 'Encyclopedist',  description: 'Collect 250 Pokémon cards in your Pokédex',   icon: '📖' },
+  { id: 'dex_300',   name: 'Living Pokédex', description: 'Collect 300 Pokémon cards in your Pokédex',   icon: '🌐' },
+
+  // ── Starters ───────────────────────────────────────────────────────────────
+  { id: 'starters_kanto',  name: 'OG Trio',          description: 'Catch all 3 Kanto starters (Bulbasaur, Charmander, Squirtle lines)',   icon: '🔴' },
+  { id: 'starters_johto',  name: 'Johto Journey',    description: 'Catch all 3 Johto starters (Chikorita, Cyndaquil, Totodile lines)',    icon: '🌿' },
+  { id: 'starters_hoenn',  name: 'Hoenn Heroes',     description: 'Catch all 3 Hoenn starters (Treecko, Torchic, Mudkip lines)',         icon: '🌊' },
+  { id: 'starters_sinnoh', name: 'Sinnoh Legends',   description: 'Catch all 3 Sinnoh starters (Turtwig, Chimchar, Piplup lines)',       icon: '❄️' },
+  { id: 'starters_unova',  name: 'Unova United',     description: 'Catch all 3 Unova starters (Snivy, Tepig, Oshawott lines)',           icon: '⚫' },
+  { id: 'starters_kalos',  name: 'Kalos Collection', description: 'Catch all 3 Kalos starters (Chespin, Fennekin, Froakie lines)',       icon: '🥐' },
+  { id: 'starters_alola',  name: 'Alolan Spirit',    description: 'Catch all 3 Alola starters (Rowlet, Litten, Popplio lines)',          icon: '🌺' },
+  { id: 'starters_galar',  name: 'Galar Gang',       description: 'Catch all 3 Galar starters (Grookey, Scorbunny, Sobble lines)',       icon: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+  { id: 'starters_paldea', name: 'Paldea Pioneers',  description: 'Catch all 3 Paldea starters (Sprigatito, Fuecoco, Quaxly lines)',     icon: '🌸' },
 
   // ── Comeback ───────────────────────────────────────────────────────────────
   { id: 'comeback_kid',     name: 'Comeback Kid',        description: 'Win a hand after being nearly broke (under $10)',   icon: '🦅' },
@@ -192,16 +209,54 @@ export function checkWinAchievements(ctx: WinContext, already: UnlockedAchieveme
   return earned;
 }
 
-// ── Dex milestone checks (called whenever dex size changes) ──────────────────
-export function checkDexAchievements(dexSize: number, already: UnlockedAchievement[]): string[] {
+// ── Starter families per region ──────────────────────────────────────────────
+// Each inner array is one evolutionary line; catching ANY member counts.
+const STARTERS: Record<string, string[][]> = {
+  starters_kanto:  [['Bulbasaur','Ivysaur','Venusaur'],      ['Charmander','Charmeleon','Charizard'],   ['Squirtle','Wartortle','Blastoise']],
+  starters_johto:  [['Chikorita','Bayleef','Meganium'],       ['Cyndaquil','Quilava','Typhlosion'],      ['Totodile','Croconaw','Feraligatr']],
+  starters_hoenn:  [['Treecko','Grovyle','Sceptile'],         ['Torchic','Combusken','Blaziken'],        ['Mudkip','Marshtomp','Swampert']],
+  starters_sinnoh: [['Turtwig','Grotle','Torterra'],          ['Chimchar','Monferno','Infernape'],       ['Piplup','Prinplup','Empoleon']],
+  starters_unova:  [['Snivy','Servine','Serperior'],          ['Tepig','Pignite','Emboar'],              ['Oshawott','Dewott','Samurott']],
+  starters_kalos:  [['Chespin','Quilladin','Chesnaught'],     ['Fennekin','Braixen','Delphox'],          ['Froakie','Frogadier','Greninja']],
+  starters_alola:  [['Rowlet','Dartrix','Decidueye'],         ['Litten','Torracat','Incineroar'],        ['Popplio','Brionne','Primarina']],
+  starters_galar:  [['Grookey','Thwackey','Rillaboom'],       ['Scorbunny','Raboot','Cinderace'],        ['Sobble','Drizzile','Inteleon']],
+  starters_paldea: [['Sprigatito','Floragato','Meowscarada'], ['Fuecoco','Crocalor','Skeledirge'],       ['Quaxly','Quaxwell','Quaquaval']],
+};
+
+function hasStarterLine(names: string[], line: string[]): boolean {
+  return names.some(n => line.some(s => n.toLowerCase().includes(s.toLowerCase())));
+}
+
+// ── Dex milestone checks (called whenever dex changes) ───────────────────────
+// uniqueSize  = count of distinct Pokémon names
+// totalSize   = total dex entries (including duplicate catches)
+// allNames    = every name in the dex (duplicates included)
+export function checkDexAchievements(
+  uniqueSize: number,
+  totalSize: number,
+  allNames: string[],
+  already: UnlockedAchievement[],
+): string[] {
   const done = new Set(already.map(a => a.id));
   const earned: string[] = [];
   const earn = (id: string) => { if (!done.has(id)) earned.push(id); };
 
-  if (dexSize >= 1)  earn('first_catch');
-  if (dexSize >= 10) earn('collector');
-  if (dexSize >= 25) earn('master_trainer');
-  if (dexSize >= 50) earn('gotta_catch_em');
+  // Unique species milestones
+  if (uniqueSize >= 1)  earn('first_catch');
+  if (uniqueSize >= 10) earn('collector');
+  if (uniqueSize >= 25) earn('master_trainer');
+  if (uniqueSize >= 50) earn('gotta_catch_em');
+
+  // Total catch milestones
+  if (totalSize >= 150) earn('dex_150');
+  if (totalSize >= 200) earn('dex_200');
+  if (totalSize >= 250) earn('dex_250');
+  if (totalSize >= 300) earn('dex_300');
+
+  // Starter set achievements — need one Pokémon from each of the 3 lines
+  for (const [id, lines] of Object.entries(STARTERS)) {
+    if (lines.every(line => hasStarterLine(allNames, line))) earn(id);
+  }
 
   return earned;
 }

@@ -823,7 +823,8 @@ function App() {
 
     // Check dex milestone achievements
     const uniqueDexSize = new Set(updatedDex.map(d => d.name)).size;
-    const dexEarned = checkDexAchievements(uniqueDexSize, unlockedAchievements);
+    const allDexNames   = updatedDex.map(d => d.name);
+    const dexEarned = checkDexAchievements(uniqueDexSize, updatedDex.length, allDexNames, unlockedAchievements);
     if (dexEarned.length > 0) {
       const now = new Date().toISOString();
       const newEntries = dexEarned.map(id => ({ id, unlockedAt: now }));
