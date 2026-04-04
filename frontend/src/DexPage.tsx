@@ -27,10 +27,16 @@ async function fetchSprite(pokemonName: string): Promise<string> {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
 
-  const base = pokemonName
+  let base = pokemonName
     .replace(/\s+(ex|EX|GX|V|VMAX|VSTAR|VUNION|BREAK|LV\.X|δ|\d+)(\s|$)/gi, ' ')
     .replace(/^(Dark|Light|Team Rocket's|Rocket's|Gym|M\s)\s*/i, '')
     .trim();
+
+  // Deoxys forms: PokeAPI has deoxys-normal, deoxys-attack, deoxys-defense, deoxys-speed
+  // but the default 'deoxys' redirects to normal. Handle explicitly.
+  if (base.toLowerCase() === 'deoxys') {
+    base = 'deoxys-normal';
+  }
 
   const attempts = [
     toSlug(base.split(' ')[0]),
@@ -91,24 +97,33 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
     });
   }, []);
 
-  // Fetch sprites for all seen Pokemon
+  // Fetch sprites for all seen Pokemon in parallel
   useEffect(() => {
     const loadSprites = async () => {
       const seenNames = Array.from(seenSet);
-      const newSprites = new Map<string, string>();
-      for (const name of seenNames) {
-        if (spriteCache.has(name)) {
-          newSprites.set(name, spriteCache.get(name)!);
-        } else {
-          const url = await fetchSprite(name);
-          if (url) newSprites.set(name, url);
-        }
+      // Batch into groups of 20 to avoid overwhelming the API
+      const batchSize = 20;
+      const batches: string[][] = [];
+      for (let i = 0; i < seenNames.length; i += batchSize) {
+        batches.push(seenNames.slice(i, i + batchSize));
       }
-      setSprites(prev => {
-        const merged = new Map(prev);
-        newSprites.forEach((v, k) => merged.set(k, v));
-        return merged;
-      });
+
+      for (const batch of batches) {
+        const results = await Promise.all(
+          batch.map(async (name) => {
+            if (spriteCache.has(name)) return { name, url: spriteCache.get(name)! };
+            const url = await fetchSprite(name);
+            return { name, url };
+          })
+        );
+        setSprites(prev => {
+          const merged = new Map(prev);
+          results.forEach(r => { if (r.url) merged.set(r.name, r.url); });
+          return merged;
+        });
+        // Small delay between batches to be nice to the API
+        await new Promise(r => setTimeout(r, 100));
+      }
     };
     if (seenSet.size > 0) loadSprites();
   }, [seen]); // eslint-disable-line react-hooks/exhaustive-deps

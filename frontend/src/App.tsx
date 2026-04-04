@@ -95,7 +95,10 @@ function loadShoeCache(): PokemonCard[] | null {
     const raw = localStorage.getItem('pkmbkj-shoe');
     if (!raw) return null;
     const shoe = JSON.parse(raw) as PokemonCard[];
-    return shoe.length > 0 ? shoe : null;
+    if (shoe.length === 0) return null;
+    // Invalidate cache if cards don't have types/rarity (pre-update data)
+    if (!shoe[0].types || !shoe[0].rarity) return null;
+    return shoe;
   } catch { return null; }
 }
 
@@ -466,7 +469,7 @@ function App() {
 
       // Use cached cards if fresh (skips API call on refresh)
       const cached = loadCardCache();
-      if (cached && cached.length >= 100) {
+      if (cached && cached.length >= 100 && cached[0].types) {
         setAllCards(cached);
         // Restore persisted shoe; only build a new one if none exists
         setDeck(loadShoeCache() ?? buildShoe(cached));
