@@ -915,32 +915,41 @@ button:focus-visible,
   font-size: 0.6rem;
   font-weight: 800;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  text-shadow:
+    -1px -1px 0 #000,
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000,
+     0 1px 3px rgba(0,0,0,0.6);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.15);
+  border: 1.5px solid rgba(0,0,0,0.4);
+  line-height: 1;
 }
 
-/* Pokemon type colors */
+/* ─── Pokemon type colors ──────────────────────────────────────────────────── */
 .type-fire       { background: #f08030; }
 .type-water      { background: #6890f0; }
 .type-grass      { background: #78c850; }
-.type-electric   { background: #f8d030; color: #333; }
-.type-lightning  { background: #f8d030; color: #333; }
 .type-psychic    { background: #9b59b6; }
 .type-fighting   { background: #c03028; }
 .type-poison     { background: #a040a0; }
-.type-ground     { background: #e0c068; color: #333; }
 .type-flying     { background: #a890f0; }
 .type-bug        { background: #a8b820; }
 .type-rock       { background: #b8a038; }
 .type-ghost      { background: #705898; }
 .type-dragon     { background: #7038f8; }
 .type-dark       { background: #705848; }
-.type-steel      { background: #b8b8d0; color: #333; }
 .type-fairy      { background: #ee99ac; }
-.type-normal     { background: #a8a878; }
-.type-colorless  { background: #a8a878; }
 .type-darkness   { background: #705848; }
-.type-metal      { background: #b8b8d0; color: #333; }
+
+/* Light-color types need dark text for contrast */
+.type-electric   { background: #f8d030; color: #222; }
+.type-lightning  { background: #f8d030; color: #222; }
+.type-ground     { background: #e0c068; color: #222; }
+.type-steel      { background: #b8b8d0; color: #222; }
+.type-normal     { background: #a8a878; color: #222; }
+.type-colorless  { background: #a8a878; color: #222; }
+.type-metal      { background: #b8b8d0; color: #222; }
 
 /* ─── Rarity badges ───────────────────────────────────────────────────────── */
 .rarity-badge {

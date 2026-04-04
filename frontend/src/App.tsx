@@ -111,10 +111,16 @@ function saveShoeCache(shoe: PokemonCard[]): void {
 function getRarityClass(rarity: string): string {
   const r = rarity.toLowerCase();
   if (r.includes('secret') || r.includes('promo')) return 'secret';
-  if (r.includes('holo') || r.includes('ultra rare') || r.includes('full art')) return 'holo';
+  if (r.includes('holo') || r.includes('ultra rare') || r.includes('full art') || r.includes('radiant')) return 'holo';
   if (r.includes('rare')) return 'rare';
   if (r.includes('uncommon')) return 'uncommon';
   return 'common';
+}
+
+function isHoloCard(rarity: string): boolean {
+  const r = rarity.toLowerCase();
+  // Only cards whose rarity explicitly indicates holographic treatment
+  return r.includes('holo') || r.includes('ultra rare') || r.includes('full art') || r.includes('radiant') || r.includes('secret');
 }
 
 // ── Firebase imports ──────────────────────────────────────────────────────────
@@ -941,7 +947,7 @@ function App() {
             </div>
             <div className="hand">
               {dealerHand.map((card, idx) => (
-                <div key={card.id + idx} className={`card${card.rarity && (card.rarity.includes('Holo') || card.rarity.includes('Secret')) ? ' holo' : ''}`}
+                <div key={card.id + idx} className={`card${isHoloCard(card.rarity) ? ' holo' : ''}`}
                   style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
                   {gameState === 'playing' && idx === 2 ? (
                     <div className="card-back">
@@ -984,7 +990,7 @@ function App() {
                 return (
                   <div
                     key={card.id + idx}
-                    className={`card${isDexPending ? ' dex-eligible' : ''}${card.rarity && (card.rarity.includes('Holo') || card.rarity.includes('Secret')) ? ' holo' : ''}`}
+                    className={`card${isDexPending ? ' dex-eligible' : ''}${isHoloCard(card.rarity) ? ' holo' : ''}`}
                     onClick={(e) => {
                       if (!isDexPending) return;
                       const cardRect = (e.currentTarget as HTMLElement).getBoundingClientRect();

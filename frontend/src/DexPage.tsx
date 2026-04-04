@@ -14,8 +14,23 @@ interface DexPageProps {
 
 type Tab = 'seen' | 'caught';
 
-// Cache of sprite URLs fetched from PokeAPI
-const spriteCache = new Map<string, string>();
+// ─── Sprite cache with localStorage persistence ───────────────────────────────
+const SPRITE_STORE_KEY = 'pkmbkj-sprite-cache';
+
+function loadSpriteCache(): Map<string, string> {
+  try {
+    const raw = localStorage.getItem(SPRITE_STORE_KEY);
+    if (!raw) return new Map();
+    return new Map(Object.entries(JSON.parse(raw)));
+  } catch { return new Map(); }
+}
+
+function saveSpriteCache(cache: Map<string, string>) {
+  try { localStorage.setItem(SPRITE_STORE_KEY, JSON.stringify(Object.fromEntries(cache))); }
+  catch { /* quota exceeded */ }
+}
+
+const spriteCache: Map<string, string> = loadSpriteCache();
 
 async function fetchSprite(pokemonName: string): Promise<string> {
   if (spriteCache.has(pokemonName)) return spriteCache.get(pokemonName)!;
@@ -32,10 +47,31 @@ async function fetchSprite(pokemonName: string): Promise<string> {
     .replace(/^(Dark|Light|Team Rocket's|Rocket's|Gym|M\s)\s*/i, '')
     .trim();
 
-  // Deoxys forms: PokeAPI has deoxys-normal, deoxys-attack, deoxys-defense, deoxys-speed
-  // but the default 'deoxys' redirects to normal. Handle explicitly.
+  // Deoxys: PokeAPI has deoxys-normal (not deoxys). Map explicitly.
   if (base.toLowerCase() === 'deoxys') {
     base = 'deoxys-normal';
+  }
+
+  // Nidoran ♀/♂ need special handling
+  if (base.toLowerCase().includes('nidoran')) {
+    const clean = toSlug(base);
+    const attempts = [clean, toSlug(pokemonName)];
+    for (const name of attempts) {
+      try {
+        const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.sprites?.front_default) {
+            spriteCache.set(pokemonName, data.sprites.front_default);
+            saveSpriteCache(spriteCache);
+            return data.sprites.front_default;
+          }
+        }
+      } catch { /* try next */ }
+    }
+    spriteCache.set(pokemonName, '');
+    saveSpriteCache(spriteCache);
+    return '';
   }
 
   const attempts = [
@@ -52,12 +88,13 @@ async function fetchSprite(pokemonName: string): Promise<string> {
         const data = await res.json();
         if (data.sprites?.front_default) {
           spriteCache.set(pokemonName, data.sprites.front_default);
+          saveSpriteCache(spriteCache);
           return data.sprites.front_default;
         }
       }
     } catch { /* try next */ }
   }
-  spriteCache.set(pokemonName, '');
+  // Don't cache empty results — retry on next attempt
   return '';
 }
 
@@ -97,21 +134,21 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
     });
   }, []);
 
-  // Fetch sprites for all seen Pokemon in parallel
+  // Fetch sprites for all seen Pokemon in parallel (only once on mount + when new seen appear)
+  const fetchedRef = React.useRef<Set<string>>(new Set(Array.from(spriteCache.keys())));
+
   useEffect(() => {
     const loadSprites = async () => {
-      const seenNames = Array.from(seenSet);
+      // Only fetch sprites we haven't cached yet
+      const needsFetch = Array.from(seenSet).filter(n => !spriteCache.has(n));
+      if (needsFetch.length === 0) return;
+
       // Batch into groups of 20 to avoid overwhelming the API
       const batchSize = 20;
-      const batches: string[][] = [];
-      for (let i = 0; i < seenNames.length; i += batchSize) {
-        batches.push(seenNames.slice(i, i + batchSize));
-      }
-
-      for (const batch of batches) {
+      for (let i = 0; i < needsFetch.length; i += batchSize) {
+        const batch = needsFetch.slice(i, i + batchSize);
         const results = await Promise.all(
           batch.map(async (name) => {
-            if (spriteCache.has(name)) return { name, url: spriteCache.get(name)! };
             const url = await fetchSprite(name);
             return { name, url };
           })
@@ -121,12 +158,11 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
           results.forEach(r => { if (r.url) merged.set(r.name, r.url); });
           return merged;
         });
-        // Small delay between batches to be nice to the API
-        await new Promise(r => setTimeout(r, 100));
+        results.forEach(r => fetchedRef.current.add(r.name));
       }
     };
     if (seenSet.size > 0) loadSprites();
-  }, [seen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps — only run once on mount
 
   const caughtEntries = dex.sort((a, b) => a.name.localeCompare(b.name));
 
