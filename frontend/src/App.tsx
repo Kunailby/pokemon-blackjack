@@ -258,6 +258,7 @@ function App() {
   const [dex, setDex]                       = useState<DexEntry[]>([]);
   const [pendingDexCards, setPendingDexCards] = useState<PokemonCard[]>([]);
   const isDexEligibleRef = useRef(false);
+  const [dexPicksLeft, setDexPicksLeft]     = useState(0);
   const dexBtnRef        = useRef<HTMLButtonElement>(null);
   const [flyingCard, setFlyingCard] = useState<{src: string; fromX: number; fromY: number; toX: number; toY: number} | null>(null);
 
@@ -580,6 +581,7 @@ function App() {
 
     if (calculateTotal([p1, p2]) === 400) {
       setMessage('BLACKJACK! Perfect 400 HP!');
+      setDexPicksLeft(2); // blackjack wins get 2 dex picks
       setGameState('dealer-turn'); // immediate — no Hit/Stand window after blackjack
     } else {
       setMessage('');
@@ -718,6 +720,8 @@ function App() {
           const eligible = playerHand.filter(c => !dex.some(d => d.name === c.name));
           if (eligible.length > 0) {
             setPendingDexCards(eligible);
+            // Normal wins get 1 pick; blackjack already set 2
+            if (dexPicksLeft === 0) setDexPicksLeft(1);
             setGameState('dex-select');
             return;
           }
@@ -735,11 +739,13 @@ function App() {
   // ── Add to Pokédex ────────────────────────────────────────────────────────
   const addToDex = (card: PokemonCard) => {
     if (dex.some(d => d.name === card.name)) return;
+    if (dexPicksLeft <= 0) return;
 
     const newEntry: DexEntry = { name: card.name, sprite: '' };
     const updatedDex = [...dex, newEntry];
     setDex(updatedDex);
     setPendingDexCards(prev => prev.filter(c => c.name !== card.name));
+    setDexPicksLeft(prev => prev - 1);
 
     // Save immediately (without sprite), then update sprite in background
     const users = loadUsers();
@@ -754,6 +760,15 @@ function App() {
         return updated;
       });
     });
+
+    // Auto-exit dex-select when no picks left
+    // Use setTimeout to let the state update propagate
+    setTimeout(() => {
+      setDexPicksLeft(remaining => {
+        if (remaining <= 0) setGameState('game-over');
+        return remaining;
+      });
+    }, 100);
   };
 
   // ── Collect daily bonus (from broke screen) ──────────────────────────────
@@ -789,6 +804,7 @@ function App() {
   const newRound = () => {
     setPlayerHand([]); setDealerHand([]); setBet(0); setDisplayedPlayerTotal(0);
     setPendingDexCards([]);
+    setDexPicksLeft(0);
     setMessageType('');
     setMessage(chips <= 0 ? '' : 'Place your wager!');
     setGameState('betting');
@@ -962,7 +978,7 @@ function App() {
             </div>
             <div className="hand">
               {playerHand.map((card, idx) => {
-                const isDexPending = gameState === 'dex-select' && pendingDexCards.some(c => c.name === card.name);
+                const isDexPending = gameState === 'dex-select' && pendingDexCards.some(c => c.name === card.name) && dexPicksLeft > 0;
                 return (
                   <div
                     key={card.id + idx}
@@ -981,8 +997,6 @@ function App() {
                         });
                       }
                       addToDex(card);
-                      // Auto-advance only when the last eligible card is captured
-                      if (pendingDexCards.length === 1) setGameState('game-over');
                     }}
                     style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
                   >
@@ -1048,7 +1062,11 @@ function App() {
             {gameState === 'dex-select' && (
               <>
                 <p className="dex-select-prompt">
-                  Tap a <span className="dex-select-highlight">glowing card</span> to register it in your Pokédex.
+                  {dexPicksLeft >= 2 ? (
+                    <>🎉 <strong>BLACKJACK BONUS!</strong> You can pick <span className="dex-select-highlight">2 cards</span> for your Pokédex!</>
+                  ) : (
+                    <>Tap a <span className="dex-select-highlight">glowing card</span> to register it in your Pokédex. <span className="dex-picks-left">({dexPicksLeft} pick{dexPicksLeft !== 1 ? 's' : ''} left)</span></>
+                  )}
                 </p>
                 <button className="btn-primary btn-new-round" onClick={() => setGameState('game-over')}>
                   Done

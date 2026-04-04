@@ -25,7 +25,9 @@ Pokemon Blackjack is a card game that combines Blackjack mechanics with Pokemon 
 
 **Dex eligibility:**
 - To capture Pokémon after a win, the bet must be **≥ 10% of the player's chips at Deal time** (before deduction)
-- All new cards in the winning hand (not already in the Dex) are shown as capturable; player may tap each one individually
+- **Normal win:** player may select **exactly 1 card** from their winning hand to add to the Pokédex
+- **Blackjack (400 HP on initial 2 cards):** player may select **2 cards** as a bonus reward — the UI displays a special "BLACKJACK BONUS!" message
+- Once the player has used all their picks, the game auto-advances to the game-over screen
 - Dex capture is only available on a **win** — pushes and losses never trigger it
 
 **Hall of Fame:**
