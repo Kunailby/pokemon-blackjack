@@ -111,6 +111,24 @@ export function playLose(): void {
   });
 }
 
+// Very short chip-tap for bet button feedback (mobile-friendly)
+export function playChipClick(): void {
+  const c = getCtx();
+  if (!c) return;
+  const now = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.connect(gain);
+  gain.connect(c.destination);
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(900, now);
+  osc.frequency.exponentialRampToValueAtTime(500, now + 0.025);
+  gain.gain.setValueAtTime(0.12, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+  osc.start(now);
+  osc.stop(now + 0.04);
+}
+
 // Harsh buzz for bust
 export function playBust(): void {
   const c = getCtx();

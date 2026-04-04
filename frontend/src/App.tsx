@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import pokedexIcon from './assets/pokedex.png';
 import './App.css';
-import { playCardDeal, playShuffle, playWin, playLose, playBust } from './sounds';
+import { playCardDeal, playShuffle, playWin, playLose, playBust, playChipClick } from './sounds';
 import HofPage, { HallOfFameEntry } from './HofPage';
 import DexPage, { DexEntry } from './DexPage';
 import AchievementsPage from './AchievementsPage';
@@ -48,16 +48,11 @@ function shuffleArray<T>(array: T[]): T[] {
   return arr;
 }
 
-// Build a 312-card shoe (6 decks) from a pool of unique cards.
-// Each copy gets a unique id suffix so React keys never collide.
-function buildShoe(cards: PokemonCard[]): PokemonCard[] {
-  const SHOE_SIZE = 312;
-  const shoe: PokemonCard[] = [];
-  for (let i = 0; i < SHOE_SIZE; i++) {
-    const card = cards[i % cards.length];
-    shoe.push({ ...card, id: `${card.id}-s${i}` });
-  }
-  return shuffleArray(shoe);
+// Build a fresh draw pile from the full card pool for one round.
+// Every card gets a unique ID suffix so React keys never collide.
+// Called at the START of each round — no caching, maximum variety.
+function buildDeck(cards: PokemonCard[]): PokemonCard[] {
+  return shuffleArray(cards.map((card, i) => ({ ...card, id: `${card.id}-r${i}` })));
 }
 
 function hashPassword(password: string): string {
@@ -80,7 +75,7 @@ function saveUsers(users: UserStore): void {
 
 // ── Card cache (6-hour TTL) ───────────────────────────────────────────────────
 // ─── Card cache ──────────────────────────────────────────────────────────────
-const CARD_CACHE_VERSION = 6; // Bumped: 15 pages, type tags hidden, rarity repositioned
+const CARD_CACHE_VERSION = 7; // Bumped: removed shoe — fresh deck drawn from full pool each round
 const CARD_CACHE_KEY = 'pkmbkj-cards-v' + CARD_CACHE_VERSION;
 
 function loadCardCache(): PokemonCard[] | null {
@@ -107,30 +102,13 @@ function saveCardCache(cards: PokemonCard[]): void {
   } catch { /* ignore */ }
 })();
 
-// ── Shoe cache (versioned — invalidated whenever card cache is bumped) ───────
-const SHOE_CACHE_KEY = 'pkmbkj-shoe-v' + CARD_CACHE_VERSION;
-
-function loadShoeCache(): PokemonCard[] | null {
+// Clean up any legacy shoe cache keys left from the old shoe system
+(function cleanOldShoeCaches() {
   try {
-    const raw = localStorage.getItem(SHOE_CACHE_KEY);
-    if (!raw) return null;
-    const shoe = JSON.parse(raw) as PokemonCard[];
-    if (shoe.length === 0) return null;
-    return shoe;
-  } catch { return null; }
-}
-
-function saveShoeCache(shoe: PokemonCard[]): void {
-  try {
-    // Remove old shoe versions
-    for (let i = 1; i < CARD_CACHE_VERSION; i++) {
-      localStorage.removeItem('pkmbkj-shoe-v' + i);
-    }
-    localStorage.removeItem('pkmbkj-shoe'); // remove unversioned legacy key
-    localStorage.setItem(SHOE_CACHE_KEY, JSON.stringify(shoe));
-  }
-  catch { /* quota exceeded — skip */ }
-}
+    for (let i = 1; i <= 7; i++) localStorage.removeItem('pkmbkj-shoe-v' + i);
+    localStorage.removeItem('pkmbkj-shoe');
+  } catch { /* ignore */ }
+})();
 
 // ── Rarity helper ─────────────────────────────────────────────────────────────
 // The TCG API's `rarity` field indicates the card's rarity tier.
@@ -444,11 +422,6 @@ function App() {
     refetch();
   }, [hallOfFame.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Persist shoe on every deck change (prevents refresh abuse) ──────────
-  useEffect(() => {
-    if (deck.length > 0) saveShoeCache(deck);
-  }, [deck]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Re-fetch missing sprites for Dex entries ──────────────────────────────
   useEffect(() => {
     if (!currentUser || dex.length === 0) return;
@@ -546,8 +519,7 @@ function App() {
       const cached = loadCardCache();
       if (cached && cached.length >= 100 && cached[0].types) {
         setAllCards(cached);
-        // Restore persisted shoe; only build a new one if none exists
-        setDeck(loadShoeCache() ?? buildShoe(cached));
+        // Deck is built fresh each round in startGame — nothing to set here
         setMessage(loginBonusRef.current || 'Place your bet!');
         loginBonusRef.current = '';
         setGameState('betting');
@@ -595,10 +567,8 @@ function App() {
         if (valid.length < 20) throw new Error('Too few cards');
         saveCardCache(valid);
         setAllCards(valid);
-        setDeck(loadShoeCache() ?? buildShoe(valid));
       } catch {
         setAllCards(FALLBACK_CARDS);
-        setDeck(loadShoeCache() ?? buildShoe(FALLBACK_CARDS));
       }
       setMessage(loginBonusRef.current || 'Place your bet!');
       loginBonusRef.current = '';
@@ -608,8 +578,11 @@ function App() {
   }, [gameState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Betting ───────────────────────────────────────────────────────────────
-  const placeBet = (amount: number) =>
-    setBet(prev => prev + amount > chips ? prev : prev + amount);
+  const placeBet = (amount: number) => {
+    if (bet + amount > chips) return;
+    playChipClick();
+    setBet(prev => prev + amount);
+  };
   const clearBet = () => setBet(0);
 
   // ── Track seen Pokemon ────────────────────────────────────────────────────
@@ -640,9 +613,9 @@ function App() {
     // Record dex eligibility: bet must be ≥ 10% of chips BEFORE deduction
     isDexEligibleRef.current = bet >= chips * 0.1;
 
-    const needsShuffle = deck.length < 20;
-    const newDeck = needsShuffle ? buildShoe(allCards) : [...deck];
-    if (needsShuffle) playShuffle();
+    // Always build a fresh deck from the full card pool — no shoe caching
+    const newDeck = buildDeck(allCards);
+    playShuffle();
 
     const p1 = newDeck.pop()!;
     const d1 = newDeck.pop()!;

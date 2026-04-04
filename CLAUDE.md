@@ -4,6 +4,19 @@ A comprehensive guide for AI assistants working on this codebase.
 
 ---
 
+## ⚠️ Card Variety Rule — READ BEFORE TOUCHING CARD/DECK CODE
+
+**Every Pokémon card in the fetched pool must be eligible to be dealt.** Never introduce a shoe cache, a fixed-size draw pile that excludes cards, or any mechanism that causes the same subset of cards to appear repeatedly across sessions.
+
+The correct architecture (do not change this):
+- **`allCards`** — the full pool of ~3750 unique cards fetched from the TCG API, cached for 6 hours with a TTL.
+- **`buildDeck(allCards)`** — called at the **start of every round** in `startGame()`. Returns a freshly shuffled copy of the entire card pool with unique IDs per card. No caching, no size limit.
+- **No shoe cache** — the old `pkmbkj-shoe-vN` localStorage keys were the root cause of variety loss. They are permanently removed. Never reintroduce them.
+
+If you need to increase variety further, increase the number of API pages fetched (currently 15 × 250 = ~3750 cards), not the deck size.
+
+---
+
 ## Project Overview
 
 Pokemon Blackjack is a card game that combines Blackjack mechanics with Pokemon TCG card artwork. Instead of traditional card values, each card's **HP stat** acts as its value.
