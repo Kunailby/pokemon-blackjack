@@ -47,8 +47,8 @@ export default function HofPage({ globalHof, personalHof, onBack }: HofPageProps
           {entries.length === 0 ? (
             <p className="hof-empty">
               {tab === 'personal'
-                ? 'No personal wins yet. Place a big bet and win!'
-                : 'No wins recorded yet. Be the first!'}
+                ? 'No entries yet. Win a hand with a big enough wager to make the list.'
+                : 'No Trainers recorded yet — be the first!'}
             </p>
           ) : (
             <ol className="hof-list">
@@ -58,7 +58,7 @@ export default function HofPage({ globalHof, personalHof, onBack }: HofPageProps
                     <span className="hof-rank">#{i + 1}</span>
                     <div className="hof-info">
                       <span className="hof-name">{entry.playerName}</span>
-                      <span className="hof-meta">${entry.bet} bet · {entry.date}</span>
+                      <span className="hof-meta">Bet: ${entry.bet} · {entry.date}</span>
                     </div>
                   </div>
                   <div className="hof-team">

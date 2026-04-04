@@ -251,6 +251,7 @@ function App() {
   const [lastDailyBonus, setLastDailyBonus] = useState('');
   const [bet, setBet]               = useState(0);
   const [message, setMessage]       = useState('');
+  const [messageType, setMessageType] = useState<'win'|'lose'|'bust'|'push'|''>('');
   const [displayedPlayerTotal, setDisplayedPlayerTotal] = useState(0);
 
   // Dex
@@ -424,11 +425,11 @@ function App() {
       startDex       = data.user.dex ?? [];
 
       if (data.isNew) {
-        bonusMsg = '👋 Welcome! You start with $1,000.';
+        bonusMsg = "Welcome, Trainer! You're starting with $1,000.";
       } else if (canClaimBonus(startLastBonus)) {
         startChips     += 100;
         startLastBonus  = new Date().toISOString();
-        bonusMsg        = '🎁 Daily bonus — +$100!';
+        bonusMsg        = 'Daily bonus — +$100 added to your stack!';
         // Persist the bonus claim immediately
         apiCall('/auth/sync', 'PUT',
           { chips: startChips, lastDailyBonus: startLastBonus, personalHof: startPersonal, dex: startDex },
@@ -453,11 +454,11 @@ function App() {
         if (canClaimBonus(startLastBonus)) {
           startChips    += 100;
           startLastBonus = new Date().toISOString();
-          bonusMsg       = '🎁 Daily bonus — +$100!';
+          bonusMsg       = 'Daily bonus — +$100 added to your stack!';
         }
       } else {
         users[username] = { passwordHash: hash, chips: 1000, lastDailyBonus: new Date().toISOString(), personalHof: [], dex: [] };
-        bonusMsg = '👋 Welcome! You start with $1,000.';
+        bonusMsg = "Welcome, Trainer! You're starting with $1,000.";
       }
       saveUsers(users);
     }
@@ -548,7 +549,7 @@ function App() {
 
   // ── Start game ────────────────────────────────────────────────────────────
   const startGame = () => {
-    if (bet === 0) { setMessage('Please place a bet first!'); return; }
+    if (bet === 0) { setMessage('Set a wager before dealing.'); return; }
 
     // Record dex eligibility: bet must be ≥ 10% of chips BEFORE deduction
     isDexEligibleRef.current = bet >= chips * 0.1;
@@ -560,28 +561,27 @@ function App() {
     const p1 = newDeck.pop()!;
     const d1 = newDeck.pop()!;
     const p2 = newDeck.pop()!;
-    const d2 = newDeck.pop()!;
-    const d3 = newDeck.pop()!; // face-down
+    const d2 = newDeck.pop()!; // face-down (hole card)
 
     playCardDeal();
     setTimeout(() => playCardDeal(), 120);
     setTimeout(() => playCardDeal(), 240);
     setTimeout(() => playCardDeal(), 360);
-    setTimeout(() => playCardDeal(), 480);
-    setTimeout(() => setDisplayedPlayerTotal(calculateTotal([p1, p2])), 750);
+    setTimeout(() => setDisplayedPlayerTotal(calculateTotal([p1, p2])), 600);
 
     setDeck(newDeck);
     setPlayerHand([p1, p2]);
-    setDealerHand([d1, d2, d3]);
+    setDealerHand([d1, d2]);
     setChips(c => c - bet);
     setPendingDexCards([]);
-    setGameState('playing');
+    setMessageType('');
 
     if (calculateTotal([p1, p2]) === 400) {
-      setMessage('BLACKJACK! 400 HP!');
-      setTimeout(() => setGameState('dealer-turn'), 1000);
+      setMessage('BLACKJACK! Perfect 400 HP!');
+      setGameState('dealer-turn'); // immediate — no Hit/Stand window after blackjack
     } else {
       setMessage('');
+      setGameState('playing');
     }
   };
 
@@ -599,10 +599,11 @@ function App() {
     if (total > 400) {
       setTimeout(() => playBust(), 120);
       setMessage(`Overkill! You busted at ${total} HP!`);
+      setMessageType('bust');
       setGameState('game-over');
     } else if (total === 400) {
-      setMessage("Perfect 400! Dealer steps up…");
-      setTimeout(() => setGameState('dealer-turn'), 1000);
+      setMessage("Perfect 400 — Gym Leader's turn.");
+      setGameState('dealer-turn'); // immediate — no second Hit window at 400
     }
   };
 
@@ -610,7 +611,7 @@ function App() {
   const stand = () => {
     if (gameState !== 'playing') return;
     setGameState('dealer-turn');
-    setMessage("Dealer's turn…");
+    setMessage("Gym Leader's turn…");
   };
 
   // ── Dealer turn ───────────────────────────────────────────────────────────
@@ -676,8 +677,9 @@ function App() {
 
       // Guard: player already busted before dealer turn (shouldn't normally happen)
       if (playerTotal > 400) {
-        playLose();
+        playBust();
         setMessage(`Overkill! You busted at ${playerTotal} HP!`);
+        setMessageType('bust');
         setGameState('game-over');
         return;
       }
@@ -686,17 +688,21 @@ function App() {
 
       if (dealerTotal > 400) {
         playWin();
-        setMessage("Dealer's overmatched! You WIN by bust!");
+        setMessage('Gym Leader busted! You win!');
+        setMessageType('win');
         setChips(c => c + bet * 2);
       } else if (playerTotal > dealerTotal) {
         playWin();
-        setMessage('Champion! You claimed the prize!');
+        setMessage('Champion! You win!');
+        setMessageType('win');
         setChips(c => c + bet * 2);
       } else if (dealerTotal > playerTotal) {
         playLose();
-        setMessage("The dealer's hand prevails. Better luck next round!");
+        setMessage('Gym Leader wins. Better luck next time.');
+        setMessageType('lose');
       } else {
-        setMessage('Standoff! Your chips are safe.');
+        setMessage("Standoff — it's a draw! Bet returned.");
+        setMessageType('push');
         setChips(c => c + bet);
       }
 
@@ -704,7 +710,7 @@ function App() {
         saveWin(playerHand, bet);
         if (!isDexEligibleRef.current) {
           // Bet was under 10% of chips — ineligible
-          setMessage(prev => prev + ' — Under Dex limit, cannot redeem reward.');
+          setMessage(prev => prev + ' — Bet too small to unlock a Dex capture.');
         } else {
           // Use dex state directly (avoids stale localStorage reads)
           const eligible = playerHand.filter(c => !dex.some(d => d.name === c.name));
@@ -754,7 +760,7 @@ function App() {
     const newBonus = new Date().toISOString();
     setChips(c => c + 100);
     setLastDailyBonus(newBonus);
-    setMessage('Daily bonus collected! +$100 — Choose your wager!');
+    setMessage('Daily bonus collected! +$100 — back in the game.');
   };
 
   // ── Logout ────────────────────────────────────────────────────────────────
@@ -771,6 +777,7 @@ function App() {
     setPlayerHand([]);
     setDealerHand([]);
     setMessage('');
+    setMessageType('');
     setDisplayedPlayerTotal(0);
     setLastDailyBonus('');
     setLogoutConfirm(false);
@@ -780,7 +787,8 @@ function App() {
   const newRound = () => {
     setPlayerHand([]); setDealerHand([]); setBet(0); setDisplayedPlayerTotal(0);
     setPendingDexCards([]);
-    setMessage(chips <= 0 ? '' : 'Place your bet!');
+    setMessageType('');
+    setMessage(chips <= 0 ? '' : 'Place your wager!');
     setGameState('betting');
   };
 
@@ -791,7 +799,7 @@ function App() {
         <div className="auth-container">
           <div className="auth-panel">
             <h1 className="auth-title">Pokémon <span>Blackjack</span></h1>
-            <p className="auth-subtitle">Sign in — or type a new name to register</p>
+            <p className="auth-subtitle">Sign in, or choose a name to join.</p>
             <form className="auth-form" onSubmit={handleAuth}>
               <div className="auth-field">
                 <label className="auth-label">Username</label>
@@ -807,10 +815,10 @@ function App() {
               </div>
               {authError && <p className="auth-error">{authError}</p>}
               <button className="btn-primary btn-deal auth-submit" type="submit" disabled={authLoading}>
-                {authLoading ? 'Signing in…' : 'Play'}
+                {authLoading ? 'Entering…' : 'Play'}
               </button>
             </form>
-            <p className="auth-hint">No email needed · New accounts start with $1,000 · $100 daily bonus</p>
+            <p className="auth-hint">No email needed — start with $1,000 and collect a $100 daily bonus.</p>
           </div>
         </div>
       </div>
@@ -823,7 +831,7 @@ function App() {
       <div className="app">
         <div className="loading-container">
           <div className="loading-spinner" />
-          <p className="loading-text">Fetching Pokémon cards…</p>
+          <p className="loading-text">Shuffling the deck…</p>
         </div>
       </div>
     );
@@ -840,9 +848,9 @@ function App() {
   }
 
   // ── Render: Game ──────────────────────────────────────────────────────────
-  // Exclude the facedown card (index 2) from the displayed total during 'playing'
+  // Only show face-up card (index 0) during 'playing'; reveal full hand once dealer acts
   const dealerTotal     = gameState === 'playing'
-    ? calculateTotal(dealerHand.slice(0, 2))
+    ? calculateTotal(dealerHand.slice(0, 1))
     : calculateTotal(dealerHand);
   const showDealerTotal = gameState !== 'betting';
 
@@ -902,14 +910,14 @@ function App() {
         {chips <= 0 && gameState === 'betting' && (
           <div className="broke-screen">
             <p className="broke-icon">💸</p>
-            <p className="broke-title">Bankrupt!</p>
+            <p className="broke-title">Blacked Out!</p>
             {canClaimBonus(lastDailyBonus) ? (
               <>
-                <p className="broke-subtitle">Your daily bonus is ready.</p>
+                <p className="broke-subtitle">Your daily bonus is waiting!</p>
                 <button className="btn-primary broke-btn" onClick={collectBonus}>Collect $100</button>
               </>
             ) : (
-              <p className="broke-subtitle">Daily bonus in <strong>{bonusCountdown(lastDailyBonus)}</strong></p>
+              <p className="broke-subtitle">Next bonus in <strong>{bonusCountdown(lastDailyBonus)}</strong></p>
             )}
           </div>
         )}
@@ -917,24 +925,26 @@ function App() {
         {/* Play area — hidden when broke at betting screen */}
         {(chips > 0 || gameState !== 'betting') && <>
 
-          {/* Dealer */}
+          {/* Gym Leader */}
           <div className="panel">
             <div className="panel-label">
-              Dealer
-              <span className={`total-badge${showDealerTotal ? '' : ' hidden'}`}>{dealerTotal} HP</span>
+              Gym Leader
+              <span className={`total-badge${showDealerTotal ? '' : ' hidden'}`}>
+                {dealerTotal} HP{gameState === 'playing' ? ' + ?' : ''}
+              </span>
             </div>
             <div className="hand">
               {dealerHand.map((card, idx) => (
                 <div key={card.id + idx} className="card"
                   style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
-                  {gameState === 'playing' && idx === 2 ? (
+                  {gameState === 'playing' && idx === 1 ? (
                     <div className="card-back">
                       <div className="card-back-ball" />
                     </div>
                   ) : (
                     <>
                       <img src={card.images.small} alt={card.name} className="card-image" />
-                      <span className="card-hp">{card.hp} HP</span>
+                      <span className={`card-hp${card.hp <= 60 ? ' hp-low' : card.hp <= 120 ? ' hp-mid' : ' hp-high'}`}>{card.hp} HP</span>
                     </>
                   )}
                 </div>
@@ -969,12 +979,13 @@ function App() {
                         });
                       }
                       addToDex(card);
-                      setGameState('game-over');
+                      // Auto-advance only when the last eligible card is captured
+                      if (pendingDexCards.length === 1) setGameState('game-over');
                     }}
                     style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
                   >
                     <img src={card.images.small} alt={card.name} className="card-image" />
-                    <span className="card-hp">{card.hp} HP</span>
+                    <span className={`card-hp${card.hp <= 60 ? ' hp-low' : card.hp <= 120 ? ' hp-mid' : ' hp-high'}`}>{card.hp} HP</span>
                     {isDexPending && <span className="dex-capture-badge">+ DEX</span>}
                   </div>
                 );
@@ -984,7 +995,7 @@ function App() {
 
           {/* Message */}
           {message && (
-            <div className="message-panel">
+            <div className={`message-panel${messageType ? ' outcome-' + messageType : ''}`}>
               <p className="message-text">{message}</p>
             </div>
           )}
@@ -993,7 +1004,7 @@ function App() {
           <div className="controls-panel">
             {gameState === 'betting' && (
               <>
-                <span className="bet-label">Choose your wager</span>
+                <span className="bet-label">Place your wager</span>
                 <div className="bet-row">
                   {[10, 25, 50, 100].map(amount => (
                     <button key={amount} className="chip-btn"
@@ -1002,11 +1013,16 @@ function App() {
                     </button>
                   ))}
                 </div>
+                <p className="dex-threshold-hint">
+                  {bet >= chips * 0.1
+                    ? '🎴 Dex capture unlocked'
+                    : `Bet $${Math.ceil(chips * 0.1)}+ to unlock Dex capture`}
+                </p>
                 <div className="bet-summary">
                   <span className="bet-display">
                     {bet > 0
-                      ? <>Betting <strong>${bet}</strong>{bet >= chips * 0.1 ? <span className="dex-hint"> · 🎴 Dex eligible</span> : ''}</>
-                      : <span className="bet-empty">Pick your stake</span>}
+                      ? <>Wager: <strong>${bet}</strong></>
+                      : <span className="bet-empty">No wager yet</span>}
                   </span>
                   {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
                 </div>
@@ -1024,16 +1040,16 @@ function App() {
             )}
 
             {gameState === 'dealer-turn' && (
-              <p className="bet-display">Dealer is playing…</p>
+              <p className="bet-display">Gym Leader draws…</p>
             )}
 
             {gameState === 'dex-select' && (
               <>
                 <p className="dex-select-prompt">
-                  Tap a <span className="dex-select-highlight">glowing card</span> to add it to your Pokédex!
+                  Tap a <span className="dex-select-highlight">glowing card</span> to register it in your Pokédex.
                 </p>
                 <button className="btn-primary btn-new-round" onClick={() => setGameState('game-over')}>
-                  Confirm Roster
+                  Done
                 </button>
               </>
             )}
@@ -1057,7 +1073,7 @@ function App() {
               }
               return (
                 <button className="btn-primary btn-new-round" onClick={newRound}>
-                  New Round
+                  Rematch
                 </button>
               );
             })()}
@@ -1065,7 +1081,9 @@ function App() {
 
         </>}
 
-        <p className="footer">{deck.length} cards remaining</p>
+        {(gameState === 'playing' || gameState === 'dealer-turn') && (
+          <p className="footer">{deck.length} cards remaining</p>
+        )}
 
       </div>
     </div>

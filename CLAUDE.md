@@ -14,8 +14,32 @@ Pokemon Blackjack is a card game that combines Blackjack mechanics with Pokemon 
 - Dealer stands at: **301+ HP** (hits while HP ≤ 300)
 - Win payout: **2x bet** (all wins, including blackjack — no 3:2 distinction)
 - Push (tie): **Equal HP** → bet returned, no chip change
-- Blackjack: **exactly 400 HP on the initial 2-card deal only** — hitting to 400 is a regular win, not blackjack
+- Blackjack: **exactly 400 HP on the initial 2-card deal only** — cosmetic label only; dealer still plays out; no bonus payout; hitting to 400 is a regular win, not blackjack
 - Simultaneous bust: player busts before dealer turn, so dealer bust during dealer-turn always means player wins
+
+**Dealer deal:**
+- Dealer receives **2 cards**: one face-up (index 0), one face-down / hole card (index 1)
+- Only the face-up card HP is shown to the player during their turn (displayed as "X HP + ?")
+- When the dealer's turn begins the hole card is revealed; all cards count toward the dealer's total
+- If the dealer's starting 2-card total is already ≥ 301, they stand immediately without drawing
+
+**Dex eligibility:**
+- To capture Pokémon after a win, the bet must be **≥ 10% of the player's chips at Deal time** (before deduction)
+- All new cards in the winning hand (not already in the Dex) are shown as capturable; player may tap each one individually
+- Dex capture is only available on a **win** — pushes and losses never trigger it
+
+**Hall of Fame:**
+- Every winning hand is recorded automatically
+- Global and personal leaderboards each show the top 10 wins, ranked by **bet size descending**
+- Ties in bet size are ordered by insertion time (most recent first)
+- Each entry records: player name, bet amount, date, and the Pokémon in the winning hand
+
+**UI terminology:**
+- The dealer is labeled **"Gym Leader"** in the UI
+- Running out of chips shows **"Blacked Out!"** (Pokemon Center reference)
+- The "New Round" / "Play again" button is labeled **"Rematch"**
+
+> ⚠️ **Backend note:** `backend/src/services/GameLogic.ts` is **legacy code** and does not reflect current frontend rules. Specifically, the backend treats a dealer total of exactly 400 as a "dealer blackjack" that beats non-400 player hands — the frontend does not. Always use `frontend/src/App.tsx` as the authoritative rules reference.
 
 **Current state:** The frontend is a fully client-side single-player React app. The backend (Express + MongoDB) contains an older multiplayer architecture that is not actively used by the frontend.
 
@@ -127,7 +151,7 @@ The entire game loop runs client-side:
 
 1. **Loading** — Fetch 250 unique Pokemon cards from TCG API; fall back to 15 hardcoded cards if the API fails
 2. **Betting** — Player picks a chip amount ($10, $25, $50, $100)
-3. **Playing** — Player receives 2 cards; dealer receives 2 cards (one hidden). Player can **Hit** or **Stand**
+3. **Playing** — Player receives 2 cards; dealer receives 2 cards (first face-up, second face-down). Player can **Hit** or **Stand**
 4. **Dealer Turn** — Dealer auto-plays with 1-second delays per card until HP ≥ 301
 5. **Game Over** — Compare totals, pay out chips, allow replay
 

@@ -20,14 +20,14 @@ export default function DexPage({ dex, onBack }: DexPageProps) {
         <div className="page-header">
           <button className="back-btn" onClick={onBack}>← Back</button>
           <span className="page-title">My Pokédex</span>
-          <span className="page-count">{dex.length} registered</span>
+          <span className="page-count">{dex.length} caught</span>
         </div>
 
         {dex.length === 0 ? (
           <div className="panel">
             <p className="hof-empty">
-              No Pokémon registered yet.<br />
-              Win a hand with a bet ≥ 10% of your chips to unlock captures.
+              No Pokémon caught yet.<br />
+              Win a hand with a wager of at least 10% of your chips to unlock captures.
             </p>
           </div>
         ) : (

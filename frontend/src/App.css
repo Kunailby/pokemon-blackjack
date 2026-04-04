@@ -661,6 +661,44 @@ body::after {
   border-color: rgba(74, 222, 128, 0.35);
 }
 
+/* ─── Message panel outcome tints ───────────────────────────────────────────── */
+.message-panel.outcome-win {
+  border-color: rgba(74, 222, 128, 0.4);
+  background: linear-gradient(135deg, rgba(74,222,128,0.08) 0%, var(--glass-bg) 100%);
+}
+.message-panel.outcome-lose {
+  border-color: rgba(240, 112, 112, 0.4);
+  background: linear-gradient(135deg, rgba(240,112,112,0.08) 0%, var(--glass-bg) 100%);
+}
+.message-panel.outcome-bust {
+  border-color: rgba(240, 112, 112, 0.5);
+  background: linear-gradient(135deg, rgba(240,112,112,0.12) 0%, var(--glass-bg) 100%);
+}
+.message-panel.outcome-push {
+  border-color: rgba(245, 200, 66, 0.4);
+  background: linear-gradient(135deg, rgba(245,200,66,0.08) 0%, var(--glass-bg) 100%);
+}
+
+/* ─── Dex threshold hint ─────────────────────────────────────────────────────── */
+.dex-threshold-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+  margin: 2px 0 6px;
+  text-align: center;
+  transition: color 0.2s;
+}
+.dex-threshold-hint:has(.dex-hint), .dex-threshold-hint {
+  color: var(--text-secondary);
+}
+
+/* ─── Focus-visible ring on all interactive elements ────────────────────────── */
+button:focus-visible,
+.card.dex-eligible:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 /* ─── Hand / Cards ──────────────────────────────────────────────────────────── */
 .hand {
   display: flex;
@@ -767,6 +805,11 @@ body::after {
   border-radius: 20px;
   white-space: nowrap;
 }
+
+/* HP badge color coding by value range */
+.card-hp.hp-low  { color: #4ade80; }   /* ≤ 60 HP  — easy, green  */
+.card-hp.hp-mid  { color: var(--gold); } /* 61–120 HP — mid, gold   */
+.card-hp.hp-high { color: var(--danger); } /* 121+ HP — heavy, red  */
 
 /* ─── Message ───────────────────────────────────────────────────────────────── */
 .message-panel {
@@ -1119,8 +1162,17 @@ body::after {
   .panel { padding: 18px 16px; }
   .controls-panel { padding: 18px 16px; }
 
-  .card { width: 90px; }
-  .card-hp { font-size: 0.85rem; }
+  .card { width: 78px; }
+  .card-hp { font-size: 0.8rem; }
+
+  /* Prevent cards from pushing controls off screen on aggressive hit chains */
+  .hand {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    min-height: 160px;
+  }
 
   .play-buttons { gap: 10px; }
   .btn-primary { padding: 12px 28px; font-size: 0.82rem; }
