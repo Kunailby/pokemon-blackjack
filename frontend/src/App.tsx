@@ -518,18 +518,23 @@ function App() {
 
         // Fetch pages spread across the full catalog for maximum variety
         const p1 = await fetchPage(1);
-        const totalCount: number = p1.totalCount ?? 1000;
-        const maxPage = Math.ceil(totalCount / 250);
+        const totalCount: number = p1.totalCount ?? 2000;
+        const maxPage = Math.max(2, Math.ceil(totalCount / 250));
 
-        // Fetch 10 pages spread evenly across the catalog
-        const pageCount = Math.min(10, maxPage);
-        const segment = Math.floor(maxPage / pageCount);
-        const pages = Array.from({ length: pageCount }, (_, i) => 1 + i * segment);
+        // Pick 9 additional pages spread randomly across the full catalog (10 total)
+        // Random distribution ensures different cards every session
+        const picks = new Set<number>([1]);
+        const segments = 9;
+        const segment = Math.max(1, Math.floor(maxPage / segments));
+        for (let i = 0; i < segments; i++) {
+          const base = i * segment + 2;
+          picks.add(Math.min(maxPage, base + Math.floor(Math.random() * Math.max(1, segment))));
+        }
+        picks.delete(1); // already have p1
 
-        const results = await Promise.all(pages.map(p => fetchPage(p)));
-        const raw: any[] = results.flatMap(r => r.data ?? []);
-
-        // Deduplicate by unique card id (allows multiple Charizard variants from different sets)
+        const extras = await Promise.all(Array.from(picks).map(p => fetchPage(p)));
+        const raw: any[] = (p1.data ?? []).concat(...extras.map((r: any) => r.data ?? []));
+        // Deduplicate by card ID — allows multiple variants of the same Pokémon (different sets)
         const seenIds = new Set<string>();
         const valid: PokemonCard[] = [];
         for (const c of raw) {

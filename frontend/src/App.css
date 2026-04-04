@@ -797,11 +797,10 @@ button:focus-visible,
 
 /* ─── Hand / Cards ──────────────────────────────────────────────────────────── */
 .hand {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
-  flex-wrap: wrap;
-  min-height: 192px;
-  align-items: center;
+  align-items: start;
 }
 
 /* Deal animation */
@@ -825,14 +824,14 @@ button:focus-visible,
 
 .card {
   position: relative;
-  width: 116px;
+  width: 100%;
+  min-width: 0;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: var(--shadow-card);
   animation: card-deal 0.38s cubic-bezier(0.22, 0.61, 0.36, 1) both;
   animation-delay: var(--deal-delay, 0s);
   cursor: default;
-  flex-shrink: 0;
 }
 
 .card:hover {
@@ -1437,17 +1436,8 @@ button:focus-visible,
   .panel { padding: 18px 16px; }
   .controls-panel { padding: 18px 16px; }
 
-  .card { width: 78px; }
+  .hand { gap: 8px; }
   .card-hp { font-size: 0.8rem; }
-
-  /* Prevent cards from pushing controls off screen on aggressive hit chains */
-  .hand {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 6px;
-    min-height: 160px;
-  }
 
   .play-buttons { gap: 10px; }
   .btn-primary { padding: 12px 28px; font-size: 0.82rem; }
