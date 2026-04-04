@@ -9,6 +9,7 @@ import { doc, getDoc, setDoc, updateDoc, onSnapshot, runTransaction, Unsubscribe
 import { auth, db } from '../firebase';
 import { HallOfFameEntry } from '../HofPage';
 import { DexEntry } from '../DexPage';
+import { UnlockedAchievement } from '../achievements';
 
 export interface UserData {
   chips: number;
@@ -19,6 +20,8 @@ export interface UserData {
   totalGamesPlayed: number;
   totalWins: number;
   totalLosses: number;
+  unlockedAchievements: UnlockedAchievement[];
+  winStreak: number;
 }
 
 const DEFAULT_DATA: UserData = {
@@ -30,6 +33,8 @@ const DEFAULT_DATA: UserData = {
   totalGamesPlayed: 0,
   totalWins: 0,
   totalLosses: 0,
+  unlockedAchievements: [],
+  winStreak: 0,
 };
 
 /**

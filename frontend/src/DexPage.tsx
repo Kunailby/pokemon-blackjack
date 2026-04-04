@@ -155,7 +155,7 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
       }
     };
     if (seenSet.size > 0) loadSprites();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps — only run once on mount
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build a deduplicated caught list with counts
   const caughtCountMap = new Map<string, number>();

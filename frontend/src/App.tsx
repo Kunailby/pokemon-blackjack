@@ -4,6 +4,11 @@ import './App.css';
 import { playCardDeal, playShuffle, playWin, playLose, playBust } from './sounds';
 import HofPage, { HallOfFameEntry } from './HofPage';
 import DexPage, { DexEntry } from './DexPage';
+import AchievementsPage from './AchievementsPage';
+import { ACHIEVEMENTS, AchievementDef, UnlockedAchievement, checkWinAchievements, checkDexAchievements } from './achievements';
+import { auth } from './firebase';
+import { login as firebaseLogin, logout as firebaseLogout, subscribeToUserData, updateUserData, getUserData, subscribeToGlobalHof, addToGlobalHof } from './services/firebaseAuth';
+import { onAuthStateChanged } from 'firebase/auth';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,7 +31,7 @@ interface UserData {
 
 type UserStore = Record<string, UserData>;
 type GameState = 'auth' | 'loading' | 'betting' | 'playing' | 'dealer-turn' | 'dex-select' | 'game-over';
-type Page = 'game' | 'hof' | 'dex';
+type Page = 'game' | 'hof' | 'dex' | 'achievements';
 
 // ── Pure utilities ────────────────────────────────────────────────────────────
 
@@ -156,11 +161,6 @@ function getHoloEffect(rarity: string): string {
   }
   return '';
 }
-
-// ── Firebase imports ──────────────────────────────────────────────────────────
-import { auth } from './firebase';
-import { login as firebaseLogin, logout as firebaseLogout, subscribeToUserData, updateUserData, getUserData, subscribeToGlobalHof, addToGlobalHof } from './services/firebaseAuth';
-import { onAuthStateChanged } from 'firebase/auth';
 
 const BONUS_MS = 24 * 60 * 60 * 1000;
 
@@ -318,6 +318,24 @@ function App() {
   const [personalHof, setPersonalHof] = useState<HallOfFameEntry[]>([]);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
 
+  // Achievements
+  const [unlockedAchievements, setUnlockedAchievements] = useState<UnlockedAchievement[]>([]);
+  const [newAchievements, setNewAchievements]           = useState<AchievementDef[]>([]);
+  const [winStreak, setWinStreak]                       = useState(0);
+  const hitCountRef       = useRef(0);    // hits taken this round (never stale in dealerPlay)
+  const chipsBeforeBetRef = useRef(0);    // chips value before bet deducted in startGame
+  const winStreakRef      = useRef(0);    // mirror of winStreak state for use inside effects
+
+  // Keep winStreakRef in sync so dealerPlay (useEffect closure) always reads current value
+  useEffect(() => { winStreakRef.current = winStreak; }, [winStreak]);
+
+  // Auto-dismiss achievement toast after 4 seconds
+  useEffect(() => {
+    if (newAchievements.length === 0) return;
+    const t = setTimeout(() => setNewAchievements([]), 4000);
+    return () => clearTimeout(t);
+  }, [newAchievements]);
+
   // ── Firebase auth state listener — restores session on refresh ────────────
   useEffect(() => {
     // Keep the data unsubscribe function in a local variable so it can be
@@ -367,6 +385,8 @@ function App() {
         setPersonalHof(data.personalHof ?? []);
         setDex(dexData);
         setSeenPokemon(mergedSeen);
+        setUnlockedAchievements(data.unlockedAchievements ?? []);
+        setWinStreak(data.winStreak ?? 0);
         uidRef.current = uid;
         setGameState('loading');
       })();
@@ -398,9 +418,9 @@ function App() {
       saveUsers(users);
     }
     // Sync to Firestore (real-time — other devices see changes immediately)
-    updateUserData(uidRef.current, { chips, lastDailyBonus, personalHof, dex, seenPokemon })
+    updateUserData(uidRef.current, { chips, lastDailyBonus, personalHof, dex, seenPokemon, unlockedAchievements, winStreak })
       .catch(() => { /* silent — localStorage is the fallback */ });
-  }, [chips, lastDailyBonus, dex, personalHof, seenPokemon, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chips, lastDailyBonus, dex, personalHof, seenPokemon, unlockedAchievements, winStreak, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Re-fetch missing sprites for HoF entries when board updates ─────────
   useEffect(() => {
@@ -612,6 +632,10 @@ function App() {
 
     // Reset picks unconditionally so no stale value from a prior round leaks in
     setDexPicksLeft(0);
+    // Capture chips before deduction (for All In / Loan Shark achievement checks)
+    chipsBeforeBetRef.current = chips;
+    // Reset hit counter for this round
+    hitCountRef.current = 0;
 
     // Record dex eligibility: bet must be ≥ 10% of chips BEFORE deduction
     isDexEligibleRef.current = bet >= chips * 0.1;
@@ -663,6 +687,7 @@ function App() {
   // ── Hit ───────────────────────────────────────────────────────────────────
   const hit = () => {
     if (gameState !== 'playing') return;
+    hitCountRef.current++;
     playCardDeal();
     const newDeck = [...deck];
     const card    = newDeck.pop()!;
@@ -744,13 +769,44 @@ function App() {
         playLose();
         setMessage('Gym Leader wins! Train harder next time.');
         setMessageType('lose');
+        // Reset streak on loss
+        setWinStreak(0);
+        winStreakRef.current = 0;
       } else {
         setMessage("It's a tie! Bet returned.");
         setMessageType('push');
         setChips(c => c + bet);
+        // Reset streak on push
+        setWinStreak(0);
+        winStreakRef.current = 0;
       }
 
       if (isWin) {
+        // Increment streak before achievement check so streak achievements trigger correctly
+        const newStreak = winStreakRef.current + 1;
+        winStreakRef.current = newStreak;
+        setWinStreak(newStreak);
+
+        // Check win achievements
+        const ctx = {
+          hand:          playerHand.map(c => ({ name: c.name, hp: c.hp, types: c.types, rarity: c.rarity })),
+          playerTotal,
+          dealerTotal,
+          dealerBusted:  dealerTotal > 400,
+          bet,
+          chipsBeforeBet: chipsBeforeBetRef.current,
+          isBlackjack:   playerHand.length === 2 && playerTotal === 400,
+          hitCount:      hitCountRef.current,
+          winStreak:     newStreak,
+        };
+        const justEarned = checkWinAchievements(ctx, unlockedAchievements);
+        if (justEarned.length > 0) {
+          const now = new Date().toISOString();
+          const newEntries = justEarned.map(id => ({ id, unlockedAt: now }));
+          setUnlockedAchievements(prev => [...prev, ...newEntries]);
+          setNewAchievements(ACHIEVEMENTS.filter(a => justEarned.includes(a.id)));
+        }
+
         saveWin(playerHand, bet);
         if (!isDexEligibleRef.current) {
           // Bet was under 10% of chips — ineligible
@@ -791,6 +847,20 @@ function App() {
     setNewCatchCount(prev => prev + 1);
     setPendingDexCards(prev => prev.filter(c => c.id !== card.id));
     setDexPicksLeft(newPicksLeft);
+
+    // Check dex milestone achievements
+    const uniqueDexSize = new Set(updatedDex.map(d => d.name)).size;
+    const dexEarned = checkDexAchievements(uniqueDexSize, unlockedAchievements);
+    if (dexEarned.length > 0) {
+      const now = new Date().toISOString();
+      const newEntries = dexEarned.map(id => ({ id, unlockedAt: now }));
+      setUnlockedAchievements(prev => {
+        const merged = [...prev, ...newEntries];
+        // Queue notification (append to any already showing)
+        setNewAchievements(existing => [...existing, ...ACHIEVEMENTS.filter(a => dexEarned.includes(a.id))]);
+        return merged;
+      });
+    }
 
     // Save immediately (without sprite), then update sprite in background
     const users = loadUsers();
@@ -843,6 +913,10 @@ function App() {
     setDisplayedPlayerTotal(0);
     setLastDailyBonus('');
     setSeenPokemon([]);
+    setUnlockedAchievements([]);
+    setWinStreak(0);
+    winStreakRef.current = 0;
+    setNewAchievements([]);
     setLogoutConfirm(false);
     setGameState('auth');
   };
@@ -911,6 +985,11 @@ function App() {
     return <DexPage dex={dex} seen={seenPokemon} onBack={() => setPage('game')} />;
   }
 
+  // ── Render: Achievements page ─────────────────────────────────────────────
+  if (page === 'achievements') {
+    return <AchievementsPage unlocked={unlockedAchievements} onBack={() => setPage('game')} />;
+  }
+
   // ── Render: Game ──────────────────────────────────────────────────────────
   // Only show face-up cards (indices 0-1) during 'playing'; reveal full hand once dealer acts
   const dealerTotal     = gameState === 'playing'
@@ -920,6 +999,19 @@ function App() {
 
   return (
     <div className="app">
+      {/* Achievement unlock toast */}
+      {newAchievements.length > 0 && (
+        <div className="achievement-toast" onClick={() => setNewAchievements([])}>
+          <span className="achievement-toast-header">🎖️ Achievement Unlocked!</span>
+          {newAchievements.map(a => (
+            <div key={a.id} className="achievement-toast-row">
+              <span className="achievement-toast-icon">{a.icon}</span>
+              <span className="achievement-toast-name">{a.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Flying dex card animation */}
       {flyingCard && (
         <img
@@ -948,6 +1040,10 @@ function App() {
             <button ref={dexBtnRef} className="nav-icon-btn nav-icon-img" onClick={() => { setPage('dex'); setNewCatchCount(0); }} title="My Pokédex">
               <img src={pokedexIcon} alt="Pokédex" />
               {newCatchCount > 0 && <span className="nav-badge">{newCatchCount}</span>}
+            </button>
+            <button className="nav-icon-btn" onClick={() => setPage('achievements')} title="Achievements">
+              🎖️
+              {newAchievements.length > 0 && <span className="nav-badge">{newAchievements.length}</span>}
             </button>
           </div>
           <div className="header-right">
