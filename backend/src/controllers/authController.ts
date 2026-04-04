@@ -38,9 +38,9 @@ export const login = async (req: AuthRequest, res: Response) => {
         dex:             user.dex            || [],
       },
     });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+  } catch (error: any) {
+    console.error('Login error:', error?.message, error?.stack);
+    res.status(500).json({ error: 'Login failed: ' + (error?.message || 'unknown') });
   }
 };
 
