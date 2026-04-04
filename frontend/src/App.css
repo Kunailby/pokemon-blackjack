@@ -386,6 +386,86 @@
   word-break: break-word;
 }
 
+/* ─── Dex tabs ─────────────────────────────────────────────────────────────── */
+.dex-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.dex-tab {
+  flex: 1;
+  padding: 8px 16px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dex-tab:hover {
+  background: var(--glass-hover);
+  color: var(--text-primary);
+}
+
+.dex-tab.active {
+  background: rgba(255, 215, 0, 0.12);
+  border-color: rgba(255, 215, 0, 0.4);
+  color: #f5c842;
+}
+
+/* ─── Dex seen/unseen ─────────────────────────────────────────────────────── */
+.dex-card.unseen {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+.dex-card.caught {
+  border-color: rgba(255, 215, 0, 0.35);
+}
+
+.dex-silhouette {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+.dex-name-unseen {
+  color: var(--text-muted) !important;
+  opacity: 0.5;
+}
+
+.dex-caught-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pokeball-mini {
+  width: 14px;
+  height: 14px;
+  image-rendering: pixelated;
+}
+
+.dex-card {
+  position: relative;
+}
+
 /* ─── Auth screen ────────────────────────────────────────────────────────────── */
 .auth-container {
   min-height: 100vh;

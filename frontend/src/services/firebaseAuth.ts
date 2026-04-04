@@ -15,6 +15,7 @@ export interface UserData {
   lastDailyBonus: string;
   personalHof: HallOfFameEntry[];
   dex: DexEntry[];
+  seenPokemon: string[];
   totalGamesPlayed: number;
   totalWins: number;
   totalLosses: number;
@@ -25,6 +26,7 @@ const DEFAULT_DATA: UserData = {
   lastDailyBonus: '',
   personalHof: [],
   dex: [],
+  seenPokemon: [],
   totalGamesPlayed: 0,
   totalWins: 0,
   totalLosses: 0,
@@ -107,4 +109,8 @@ export async function updatePersonalHof(uid: string, personalHof: HallOfFameEntr
 
 export async function updateLastDailyBonus(uid: string, lastDailyBonus: string): Promise<void> {
   await updateDoc(doc(db, 'users', uid), { lastDailyBonus });
+}
+
+export async function updateSeenPokemon(uid: string, seenPokemon: string[]): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), { seenPokemon });
 }

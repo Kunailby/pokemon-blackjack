@@ -247,6 +247,8 @@ function App() {
   const [pendingDexCards, setPendingDexCards] = useState<PokemonCard[]>([]);
   const isDexEligibleRef = useRef(false);
   const [dexPicksLeft, setDexPicksLeft]     = useState(0);
+  const [seenPokemon, setSeenPokemon]       = useState<string[]>([]);
+  const [newCatchCount, setNewCatchCount]   = useState(0);
   const dexBtnRef        = useRef<HTMLButtonElement>(null);
   const [flyingCard, setFlyingCard] = useState<{src: string; fromX: number; fromY: number; toX: number; toY: number} | null>(null);
 
@@ -268,6 +270,7 @@ function App() {
         setLastDailyBonus(data.lastDailyBonus ?? '');
         setPersonalHof(data.personalHof ?? []);
         setDex(data.dex ?? []);
+        setSeenPokemon(data.seenPokemon ?? []);
       });
 
       // Also do an immediate fetch for initial render
@@ -277,6 +280,7 @@ function App() {
       setLastDailyBonus(data.lastDailyBonus ?? '');
       setPersonalHof(data.personalHof ?? []);
       setDex(data.dex ?? []);
+      setSeenPokemon(data.seenPokemon ?? []);
       uidRef.current = uid;
       setGameState('loading');
 
@@ -307,9 +311,9 @@ function App() {
       saveUsers(users);
     }
     // Sync to Firestore (real-time — other devices see changes immediately)
-    updateUserData(uidRef.current, { chips, lastDailyBonus, personalHof, dex })
+    updateUserData(uidRef.current, { chips, lastDailyBonus, personalHof, dex, seenPokemon })
       .catch(() => { /* silent — localStorage is the fallback */ });
-  }, [chips, lastDailyBonus, dex, personalHof, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chips, lastDailyBonus, dex, personalHof, seenPokemon, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Re-fetch missing sprites for HoF entries on mount ────────────────────
   useEffect(() => {
@@ -491,6 +495,20 @@ function App() {
     setBet(prev => prev + amount > chips ? prev : prev + amount);
   const clearBet = () => setBet(0);
 
+  // ── Track seen Pokemon ────────────────────────────────────────────────────
+  const recordSeen = (cards: PokemonCard[]) => {
+    setSeenPokemon(prev => {
+      const set = new Set(prev);
+      cards.forEach(c => set.add(c.name));
+      const arr = Array.from(set);
+      if (arr.length !== prev.length) {
+        // Sync to Firestore immediately
+        if (uidRef.current) updateUserData(uidRef.current, { seenPokemon: arr }).catch(() => {});
+      }
+      return arr;
+    });
+  };
+
   // ── Start game ────────────────────────────────────────────────────────────
   const startGame = () => {
     if (bet === 0) { setMessage('Set a wager before dealing.'); return; }
@@ -514,6 +532,9 @@ function App() {
     setTimeout(() => playCardDeal(), 360);
     setTimeout(() => playCardDeal(), 480);
     setTimeout(() => setDisplayedPlayerTotal(calculateTotal([p1, p2])), 750);
+
+    // Record all dealt cards as "seen" (even the hole card)
+    recordSeen([p1, d1, p2, d2, d3]);
 
     setDeck(newDeck);
     setPlayerHand([p1, p2]);
@@ -669,6 +690,7 @@ function App() {
     const newEntry: DexEntry = { name: card.name, sprite: '' };
     const updatedDex = [...dex, newEntry];
     setDex(updatedDex);
+    setNewCatchCount(prev => prev + 1);
     setPendingDexCards(prev => prev.filter(c => c.name !== card.name));
     setDexPicksLeft(prev => prev - 1);
 
@@ -791,7 +813,7 @@ function App() {
 
   // ── Render: Dex page ──────────────────────────────────────────────────────
   if (page === 'dex') {
-    return <DexPage dex={dex} onBack={() => setPage('game')} />;
+    return <DexPage dex={dex} seen={seenPokemon} allCards={allCards} onBack={() => setPage('game')} />;
   }
 
   // ── Render: Game ──────────────────────────────────────────────────────────
@@ -828,9 +850,9 @@ function App() {
             <button className="nav-icon-btn" onClick={() => setPage('hof')} title="Hall of Fame">
               🏆
             </button>
-            <button ref={dexBtnRef} className="nav-icon-btn nav-icon-img" onClick={() => setPage('dex')} title="My Pokédex">
+            <button ref={dexBtnRef} className="nav-icon-btn nav-icon-img" onClick={() => { setPage('dex'); setNewCatchCount(0); }} title="My Pokédex">
               <img src={pokedexIcon} alt="Pokédex" />
-              {dex.length > 0 && <span className="nav-badge">{dex.length}</span>}
+              {newCatchCount > 0 && <span className="nav-badge">{newCatchCount}</span>}
             </button>
           </div>
           <div className="header-right">
