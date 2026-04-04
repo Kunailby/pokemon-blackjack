@@ -15,7 +15,9 @@ interface DexPageProps {
 type Tab = 'seen' | 'caught';
 
 // ─── Sprite cache with localStorage persistence ───────────────────────────────
-const SPRITE_STORE_KEY = 'pkmbkj-sprite-cache';
+// Bump CACHE_VERSION when adding new Pokemon or fixing sprite issues
+const SPRITE_CACHE_VERSION = 2;
+const SPRITE_STORE_KEY = 'pkmbkj-sprite-cache-v' + SPRITE_CACHE_VERSION;
 
 function loadSpriteCache(): Map<string, string> {
   try {
@@ -29,6 +31,15 @@ function saveSpriteCache(cache: Map<string, string>) {
   try { localStorage.setItem(SPRITE_STORE_KEY, JSON.stringify(Object.fromEntries(cache))); }
   catch { /* quota exceeded */ }
 }
+
+// Clean old cache versions
+(function cleanOldCaches() {
+  try {
+    for (let i = 1; i < SPRITE_CACHE_VERSION; i++) {
+      localStorage.removeItem('pkmbkj-sprite-cache-v' + i);
+    }
+  } catch { /* ignore */ }
+})();
 
 const spriteCache: Map<string, string> = loadSpriteCache();
 

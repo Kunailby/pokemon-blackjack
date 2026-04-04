@@ -108,6 +108,11 @@ function saveShoeCache(shoe: PokemonCard[]): void {
 }
 
 // ── Rarity helper ─────────────────────────────────────────────────────────────
+// The TCG API's `rarity` field indicates the card's rarity tier, NOT whether
+// the specific image is holographic. Cards with "Rare Holo" rarity exist in
+// holographic variants, but the API always returns flat card scans. We show
+// the rarity badge accurately but do NOT apply holo shimmer effects since
+// we cannot reliably determine which images are actually holographic.
 function getRarityClass(rarity: string): string {
   const r = rarity.toLowerCase();
   if (r.includes('secret') || r.includes('promo')) return 'secret';
@@ -115,12 +120,6 @@ function getRarityClass(rarity: string): string {
   if (r.includes('rare')) return 'rare';
   if (r.includes('uncommon')) return 'uncommon';
   return 'common';
-}
-
-function isHoloCard(rarity: string): boolean {
-  const r = rarity.toLowerCase();
-  // Only cards whose rarity explicitly indicates holographic treatment
-  return r.includes('holo') || r.includes('ultra rare') || r.includes('full art') || r.includes('radiant') || r.includes('secret');
 }
 
 // ── Firebase imports ──────────────────────────────────────────────────────────
@@ -947,7 +946,7 @@ function App() {
             </div>
             <div className="hand">
               {dealerHand.map((card, idx) => (
-                <div key={card.id + idx} className={`card${isHoloCard(card.rarity) ? ' holo' : ''}`}
+                <div key={card.id + idx} className="card"
                   style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
                   {gameState === 'playing' && idx === 2 ? (
                     <div className="card-back">
@@ -990,7 +989,7 @@ function App() {
                 return (
                   <div
                     key={card.id + idx}
-                    className={`card${isDexPending ? ' dex-eligible' : ''}${isHoloCard(card.rarity) ? ' holo' : ''}`}
+                    className={`card${isDexPending ? ' dex-eligible' : ''}`}
                     onClick={(e) => {
                       if (!isDexPending) return;
                       const cardRect = (e.currentTarget as HTMLElement).getBoundingClientRect();

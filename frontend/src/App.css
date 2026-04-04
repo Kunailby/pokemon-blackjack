@@ -969,52 +969,24 @@ button:focus-visible,
 .rarity-holo {
   background: linear-gradient(135deg, #ffd700, #ffaa00, #ffd700);
   color: #333;
-  animation: holo-shimmer 2s ease-in-out infinite;
+  animation: badge-shimmer 2s ease-in-out infinite;
 }
 .rarity-secret {
   background: linear-gradient(135deg, #ff6b6b, #ffd700, #6bff6b, #6bb5ff, #d76bff);
   background-size: 200% 200%;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  animation: rainbow-shift 3s ease-in-out infinite;
+  animation: badge-rainbow 3s ease-in-out infinite;
 }
 
-@keyframes holo-shimmer {
+@keyframes badge-shimmer {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
 
-@keyframes rainbow-shift {
+@keyframes badge-rainbow {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
-}
-
-/* ─── Holo card shimmer effect ────────────────────────────────────────────── */
-.card.holo {
-  border: 2px solid rgba(255, 215, 0, 0.5);
-}
-.card.holo::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 40%,
-    rgba(255, 255, 255, 0.15) 45%,
-    rgba(255, 255, 255, 0.25) 50%,
-    rgba(255, 255, 255, 0.15) 55%,
-    transparent 60%
-  );
-  background-size: 200% 100%;
-  animation: card-shimmer 3s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 3;
-  border-radius: 12px;
-}
-
-@keyframes card-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
 }
 
 .card-hp {
