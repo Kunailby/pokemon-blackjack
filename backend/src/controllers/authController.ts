@@ -97,3 +97,14 @@ export const addToGlobalHoF = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: 'Failed to update HoF' });
   }
 };
+
+export const deleteAccount = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: 'Not authenticated' });
+    await User.findByIdAndDelete(req.userId);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+};
