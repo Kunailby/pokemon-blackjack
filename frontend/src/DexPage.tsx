@@ -16,7 +16,7 @@ type Tab = 'seen' | 'caught';
 
 // ─── Sprite cache with localStorage persistence ───────────────────────────────
 // Bump CACHE_VERSION when adding new Pokemon or fixing sprite issues
-const SPRITE_CACHE_VERSION = 3;
+const SPRITE_CACHE_VERSION = 4;
 const SPRITE_STORE_KEY = 'pkmbkj-sprite-cache-v' + SPRITE_CACHE_VERSION;
 
 function loadSpriteCache(): Map<string, string> {

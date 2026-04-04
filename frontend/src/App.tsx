@@ -957,7 +957,7 @@ function App() {
         </header>
 
         {/* Broke screen */}
-        {chips <= 0 && gameState === 'betting' && (
+        {chips < 5 && gameState === 'betting' && (
           <div className="broke-screen">
             <p className="broke-icon">💸</p>
             <p className="broke-title">Blacked Out!</p>
@@ -973,7 +973,7 @@ function App() {
         )}
 
         {/* Play area — hidden when broke at betting screen */}
-        {(chips > 0 || gameState !== 'betting') && <>
+        {(chips >= 5 || gameState !== 'betting') && <>
 
           {/* Gym Leader */}
           <div className="panel">
@@ -1072,7 +1072,7 @@ function App() {
                   {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
                 </div>
                 <div className="bet-row">
-                  {[10, 25, 50, 100].map(amount => (
+                  {[5, 10, 25, 50, 100].map(amount => (
                     <button key={amount} className="chip-btn"
                       onClick={() => placeBet(amount)} disabled={bet + amount > chips}>
                       +${amount}
@@ -1117,11 +1117,11 @@ function App() {
             )}
 
             {gameState === 'game-over' && (() => {
-              if (chips <= 0) {
+              if (chips < 5) {
                 return (
                   <div className="broke-screen">
                     <p className="broke-icon">💸</p>
-                    <p className="broke-title">Bankrupt!</p>
+                    <p className="broke-title">Blacked Out!</p>
                     {canClaimBonus(lastDailyBonus) ? (
                       <>
                         <p className="broke-subtitle">Your daily bonus is ready.</p>
