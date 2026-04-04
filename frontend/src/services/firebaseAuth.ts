@@ -6,7 +6,8 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { HallOfFameEntry, DexEntry } from '../types/game';
+import { HallOfFameEntry } from '../HofPage';
+import { DexEntry } from '../DexPage';
 
 export interface UserData {
   chips: number;
