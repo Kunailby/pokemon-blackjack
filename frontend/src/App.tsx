@@ -37,12 +37,14 @@ type Page = 'game' | 'hof' | 'dex' | 'achievements';
 
 interface StarParticle {
   id: number;
-  x: number;   // % from left
-  y: number;   // % from top
+  x: number;     // starting left %
   size: number;
   color: string;
   delay: number;
   char: string;
+  dx: number;    // horizontal drift px
+  dy: number;    // upward travel px (negative)
+  spin: number;  // final rotation deg
 }
 
 // ── Pure utilities ────────────────────────────────────────────────────────────
@@ -409,16 +411,18 @@ function App() {
   const triggerStarBurst = () => {
     const chars  = ['★', '✦', '✸', '✷', '✵', '⭐', '✨'];
     const colors = ['#FFD700', '#FFF176', '#FFFFFF', '#FFB300', '#C8F7FF', '#FFB3CC', '#B3FFD9'];
-    setStarParticles(Array.from({ length: 30 }, (_, i) => ({
+    setStarParticles(Array.from({ length: 32 }, (_, i) => ({
       id: i,
-      x:     5 + Math.random() * 90,
-      y:     5 + Math.random() * 90,
-      size:  12 + Math.random() * 22,
+      x:     20 + Math.random() * 60,           // launch from center strip (player board width)
+      size:  13 + Math.random() * 22,
       color: colors[Math.floor(Math.random() * colors.length)],
-      delay: Math.random() * 0.25,
+      delay: Math.random() * 0.22,
       char:  chars[Math.floor(Math.random() * chars.length)],
+      dx:    (Math.random() - 0.5) * 480,       // -240 to +240 px sideways spread
+      dy:    -(220 + Math.random() * 380),      // 220–600 px upward
+      spin:  (Math.random() - 0.5) * 720,       // -360 to +360 deg rotation
     })));
-    setTimeout(() => setStarParticles([]), 1400);
+    setTimeout(() => setStarParticles([]), 1500);
   };
   const [bossVictoryHand, setBossVictoryHand]       = useState<PokemonCard[]>([]);
   const [bossVictoryPicked, setBossVictoryPicked]   = useState(false);
@@ -1357,7 +1361,7 @@ function App() {
         </div>
       )}
 
-      {/* Win star burst */}
+      {/* Win star burst — launches from bottom (player board area) upward */}
       {starParticles.length > 0 && (
         <div className="star-burst-layer" aria-hidden="true">
           {starParticles.map(s => (
@@ -1365,12 +1369,13 @@ function App() {
               key={s.id}
               className="star-particle"
               style={{
-                left:            `${s.x}%`,
-                top:             `${s.y}%`,
-                fontSize:        `${s.size}px`,
-                color:           s.color,
-                animationDelay:  `${s.delay}s`,
-                '--star-rotate': `${Math.random() * 360}deg`,
+                left:           `${s.x}%`,
+                fontSize:       `${s.size}px`,
+                color:          s.color,
+                animationDelay: `${s.delay}s`,
+                '--dx':   `${s.dx}px`,
+                '--dy':   `${s.dy}px`,
+                '--spin': `${s.spin}deg`,
               } as React.CSSProperties}
             >
               {s.char}

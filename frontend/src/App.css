@@ -1738,28 +1738,44 @@ button:focus-visible,
   .achievements-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
 }
 
-/* ─── Win star burst ─────────────────────────────────────────────────────────── */
+/* ─── Win star burst — launches from bottom of player board upward ───────────── */
 .star-burst-layer {
   position: fixed;
-  inset: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;          /* zero-height anchor at the very bottom */
   pointer-events: none;
   z-index: 200;
-  overflow: hidden;
+  overflow: visible;    /* stars fly up out of this anchor */
 }
 
-@keyframes star-pop {
-  0%   { transform: scale(0)    rotate(0deg);                    opacity: 0; }
-  18%  { transform: scale(1.4)  rotate(calc(var(--star-rotate) * 0.4));  opacity: 1; }
-  55%  { transform: scale(1.0)  rotate(calc(var(--star-rotate) * 0.75)); opacity: 0.85; }
-  100% { transform: scale(0.4)  rotate(var(--star-rotate));              opacity: 0; }
+@keyframes star-launch {
+  0%   {
+    transform: translate(0, 0) scale(0.4) rotate(0deg);
+    opacity: 0;
+  }
+  10%  {
+    transform: translate(calc(var(--dx) * 0.08), calc(var(--dy) * 0.08)) scale(1.5) rotate(calc(var(--spin) * 0.08));
+    opacity: 1;
+  }
+  50%  {
+    transform: translate(calc(var(--dx) * 0.6), calc(var(--dy) * 0.6)) scale(1.1) rotate(calc(var(--spin) * 0.55));
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.15) rotate(var(--spin));
+    opacity: 0;
+  }
 }
 
 .star-particle {
   position: absolute;
+  bottom: 0;
   display: inline-block;
   line-height: 1;
-  animation: star-pop 0.95s ease-out forwards;
-  text-shadow: 0 0 6px currentColor;
+  animation: star-launch 1.05s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  text-shadow: 0 0 8px currentColor, 0 0 2px rgba(0,0,0,0.5);
   will-change: transform, opacity;
 }
 
