@@ -225,10 +225,10 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
                     {isCaught && (
                       <span className="dex-caught-badge">
                         <img src={pokeballIcon} alt="caught" className="pokeball-mini" />
-                        {(caughtCountMap.get(name) ?? 1) > 1 && (
-                          <span className="dex-count-badge">×{caughtCountMap.get(name)}</span>
-                        )}
                       </span>
+                    )}
+                    {isCaught && (caughtCountMap.get(name) ?? 1) > 1 && (
+                      <span className="dex-count-badge">×{caughtCountMap.get(name)}</span>
                     )}
                   </div>
                 );
