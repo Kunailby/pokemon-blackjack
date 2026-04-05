@@ -125,9 +125,14 @@ function getRarityClass(rarity: string): string {
 }
 
 // Determine shimmer type for the card visual effect
-// Returns: 'rainbow' for special holos, 'gold' for basic holos, '' for non-holo
+// Returns: 'illustration' for Illustration Rares, 'rainbow' for other special holos,
+//          'gold' for basic holos, '' for non-holo
 function getHoloEffect(rarity: string): string {
   const r = rarity.toLowerCase();
+  // Illustration Rares (SV era) — most premium effect
+  if (r.includes('illustration rare') || r.includes('special illustration')) {
+    return 'illustration';
+  }
   // Special/exalted holos: GX, V, VMAX, VSTAR, Full Art, Secret, Radiant, Ultra Rare
   if (r.includes('gx') || r.includes('vmax') || r.includes('vstar') || r.includes('v-union') ||
       r.includes('full art') || r.includes('secret') || r.includes('ultra rare') || r.includes('radiant')) {

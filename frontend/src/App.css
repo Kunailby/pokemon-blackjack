@@ -1101,6 +1101,90 @@ button:focus-visible,
   box-shadow: 0 12px 40px rgba(255, 100, 255, 0.3);
 }
 
+/* ─── Illustration Rare — vivid prismatic rainbow shimmer ────────────────── */
+.card.holo-illustration {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  /* Animated rainbow border glow */
+  box-shadow:
+    0 0 0 2px rgba(255, 80, 200, 0.6),
+    0 6px 24px rgba(120, 0, 255, 0.25);
+  animation: illustration-border-glow 3s ease-in-out infinite;
+}
+
+/* Primary colour sweep — fast, vivid, full spectrum */
+.card.holo-illustration::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent         0%,
+    rgba(255,0,128,0.30) 10%,
+    rgba(255,120,0,0.30) 20%,
+    rgba(255,240,0,0.30) 30%,
+    rgba(0,255,120,0.30) 40%,
+    rgba(0,200,255,0.30) 52%,
+    rgba(80,0,255,0.30)  62%,
+    rgba(220,0,255,0.30) 72%,
+    rgba(255,0,128,0.30) 82%,
+    transparent         92%
+  );
+  background-size: 300% 100%;
+  animation: illustration-sweep 2.2s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: inherit;
+  mix-blend-mode: screen;
+}
+
+/* Secondary shimmer layer — offset timing for depth */
+.card.holo-illustration::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    -70deg,
+    transparent          0%,
+    rgba(255,255,255,0.08) 30%,
+    rgba(255,255,255,0.22) 50%,
+    rgba(255,255,255,0.08) 70%,
+    transparent          100%
+  );
+  background-size: 200% 200%;
+  animation: illustration-gloss 3.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+  border-radius: inherit;
+}
+
+@keyframes illustration-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@keyframes illustration-gloss {
+  0%   { background-position: 200% 200%; opacity: 0.6; }
+  50%  { background-position:   0%   0%; opacity: 1;   }
+  100% { background-position: 200% 200%; opacity: 0.6; }
+}
+
+@keyframes illustration-border-glow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255,80,200,0.6),  0 6px 24px rgba(120,0,255,0.25); }
+  25%       { box-shadow: 0 0 0 2px rgba(80,200,255,0.6),  0 6px 24px rgba(0,160,255,0.25); }
+  50%       { box-shadow: 0 0 0 2px rgba(80,255,160,0.6),  0 6px 24px rgba(0,220,120,0.25); }
+  75%       { box-shadow: 0 0 0 2px rgba(255,200,0,0.6),   0 6px 24px rgba(200,120,0,0.25); }
+}
+
+.card.holo-illustration:hover {
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,0.8),
+    0 12px 40px rgba(180,0,255,0.4),
+    0 0 60px rgba(255,80,200,0.3);
+}
+
 .card-hp {
   position: absolute;
   bottom: 6px;
