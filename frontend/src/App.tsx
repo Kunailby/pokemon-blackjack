@@ -762,15 +762,17 @@ function App() {
 
         // Check win achievements
         const ctx = {
-          hand:          playerHand.map(c => ({ name: c.name, hp: c.hp, types: c.types, rarity: c.rarity })),
+          hand:                playerHand.map(c => ({ name: c.name, hp: c.hp, types: c.types, rarity: c.rarity, id: c.id })),
           playerTotal,
           dealerTotal,
-          dealerBusted:  dealerTotal > 400,
+          dealerBusted:        dealerTotal > 400,
           bet,
-          chipsBeforeBet: chipsBeforeBetRef.current,
-          isBlackjack:   playerHand.length === 2 && playerTotal === 400,
-          hitCount:      hitCountRef.current,
-          winStreak:     newStreak,
+          chipsBeforeBet:      chipsBeforeBetRef.current,
+          chipsAfterWin:       chipsBeforeBetRef.current + bet,
+          isBlackjack:         playerHand.length === 2 && playerTotal === 400,
+          hitCount:            hitCountRef.current,
+          winStreak:           newStreak,
+          dealerFinalHandSize: currentDealerHand.length,
         };
         const justEarned = checkWinAchievements(ctx, unlockedAchievements);
         if (justEarned.length > 0) {
