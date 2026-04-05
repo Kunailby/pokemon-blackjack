@@ -19,6 +19,8 @@ interface PokemonCard {
   images: { small: string; large: string };
   types: string[];
   rarity: string;
+  weaknesses?: { type: string }[];
+  resistances?: { type: string }[];
 }
 
 interface UserData {
@@ -75,7 +77,7 @@ function saveUsers(users: UserStore): void {
 
 // ── Card cache (6-hour TTL) ───────────────────────────────────────────────────
 // ─── Card cache ──────────────────────────────────────────────────────────────
-const CARD_CACHE_VERSION = 7; // Bumped: removed shoe — fresh deck drawn from full pool each round
+const CARD_CACHE_VERSION = 8; // Bumped: added weaknesses/resistances fields to PokemonCard
 const CARD_CACHE_KEY = 'pkmbkj-cards-v' + CARD_CACHE_VERSION;
 
 function loadCardCache(): PokemonCard[] | null {
@@ -146,6 +148,20 @@ function getHoloEffect(rarity: string): string {
 }
 
 // ── Boss fight helpers ────────────────────────────────────────────────────────
+
+const TYPE_COLORS: Record<string, string> = {
+  Fire:       '#FF5533',
+  Water:      '#3399FF',
+  Grass:      '#22BB55',
+  Lightning:  '#FFD700',
+  Psychic:    '#FF55AA',
+  Fighting:   '#CC3311',
+  Darkness:   '#5566DD',
+  Metal:      '#AAAACC',
+  Colorless:  '#BBAA99',
+  Dragon:     '#7733EE',
+  Fairy:      '#FF88CC',
+};
 
 function selectBossCard(cards: PokemonCard[]): PokemonCard {
   const isPremium = (c: PokemonCard) => {
@@ -352,6 +368,8 @@ function App() {
   const [fighterMaxHp, setFighterMaxHp]             = useState(BOSS_FIGHTER_HP);
   const [bossResult, setBossResult]                 = useState<'victory' | 'defeat' | null>(null);
   const [bossHandDamage, setBossHandDamage]         = useState<{ type: 'boss' | 'player'; amount: number } | null>(null);
+  const [bossEffectiveness, setBossEffectiveness]   = useState<'super' | 'resist' | 'normal' | null>(null);
+  const [dominantType, setDominantType]             = useState<string | null>(null);
   const [bossVictoryHand, setBossVictoryHand]       = useState<PokemonCard[]>([]);
   const [bossVictoryPicked, setBossVictoryPicked]   = useState(false);
   const bossActiveRef       = useRef(false);
@@ -360,6 +378,24 @@ function App() {
   const fighterCurrentHpRef = useRef(0);
   const bossResultRef       = useRef<'victory' | 'defeat' | null>(null);
   const bossCardRef         = useRef<PokemonCard | null>(null);
+  const bossCardPanelRef    = useRef<HTMLImageElement>(null);
+
+  // Flying card animation when boss card is auto-captured on victory
+  useEffect(() => {
+    if (bossResult !== 'victory') return;
+    const bossEl = bossCardPanelRef.current;
+    const dexEl  = dexBtnRef.current;
+    if (!bossEl || !dexEl || !bossCardRef.current) return;
+    const bossRect = bossEl.getBoundingClientRect();
+    const dexRect  = dexEl.getBoundingClientRect();
+    setFlyingCard({
+      src:   bossCardRef.current.images.small,
+      fromX: bossRect.left + bossRect.width  / 2,
+      fromY: bossRect.top  + bossRect.height / 2,
+      toX:   dexRect.left  + dexRect.width   / 2,
+      toY:   dexRect.top   + dexRect.height  / 2,
+    });
+  }, [bossResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-dismiss achievement toast after 4 seconds
   useEffect(() => {
@@ -616,6 +652,8 @@ function App() {
             images: c.images,
             types: c.types ?? [],
             rarity: c.rarity ?? 'Common',
+            weaknesses:  (c.weaknesses  ?? []).map((w: any) => ({ type: w.type })),
+            resistances: (c.resistances ?? []).map((r: any) => ({ type: r.type })),
           });
         }
         if (valid.length < 20) throw new Error('Too few cards');
@@ -702,12 +740,33 @@ function App() {
     } else if (initialTotal > 400) {
       // Two high-HP cards (e.g. two VMAX) can bust on the initial deal
       setTimeout(() => playBust(), 120);
-      setMessage(`Overkill! Busted on the deal at ${initialTotal} HP!`);
+      setWinStreak(0);
+      winStreakRef.current = 0;
+      if (bossActiveRef.current) {
+        applyBossPlayerDamage();
+        setMessage('Busted! The boss counters!');
+      } else {
+        setMessage(`Overkill! Busted on the deal at ${initialTotal} HP!`);
+      }
       setMessageType('bust');
       setGameState('game-over');
     } else {
       setMessage('');
       setGameState('playing');
+    }
+  };
+
+  // Helper: apply boss damage to player fighter (called from bust paths and dealerPlay)
+  const applyBossPlayerDamage = () => {
+    if (!bossActiveRef.current || bossResultRef.current !== null) return;
+    const dmg   = 30 + Math.floor(Math.random() * 25);
+    const newHp = Math.max(0, fighterCurrentHpRef.current - dmg);
+    fighterCurrentHpRef.current = newHp;
+    setFighterCurrentHp(newHp);
+    setBossHandDamage({ type: 'player', amount: dmg });
+    if (newHp <= 0) {
+      bossResultRef.current = 'defeat';
+      setBossResult('defeat');
     }
   };
 
@@ -725,7 +784,14 @@ function App() {
     setTimeout(() => setDisplayedPlayerTotal(total), 430);
     if (total > 400) {
       setTimeout(() => playBust(), 120);
-      setMessage(`Overkill! You busted at ${total} HP!`);
+      setWinStreak(0);
+      winStreakRef.current = 0;
+      if (bossActiveRef.current) {
+        applyBossPlayerDamage();
+        setMessage('Busted! The boss counters!');
+      } else {
+        setMessage(`Overkill! You busted at ${total} HP!`);
+      }
       setMessageType('bust');
       setGameState('game-over');
     } else if (total === 400) {
@@ -814,9 +880,28 @@ function App() {
       // ── Boss fight damage ─────────────────────────────────────────────────
       if (bossActiveRef.current && bossResultRef.current === null) {
         if (isWin) {
+          // Determine dominant attack type + effectiveness vs boss
+          const playerTypes = playerHand.flatMap(c => c.types);
+          const typeCounts  = playerTypes.reduce<Record<string, number>>(
+            (acc, t) => { acc[t] = (acc[t] ?? 0) + 1; return acc; }, {}
+          );
+          const dominant = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+          setDominantType(dominant);
+
+          const bossWeaks  = (bossCardRef.current?.weaknesses  ?? []).map(w => w.type);
+          const bossResist = (bossCardRef.current?.resistances ?? []).map(r => r.type);
+          const eff: 'super' | 'resist' | 'normal' =
+            dominant && bossWeaks.includes(dominant)  ? 'super'
+          : dominant && bossResist.includes(dominant) ? 'resist'
+          : 'normal';
+          setBossEffectiveness(eff);
+
           const base     = Math.floor(bossMaxHpRef.current / 5);
           const variance = Math.max(1, Math.floor(bossMaxHpRef.current / 10));
-          const dmg  = base + Math.floor(Math.random() * variance);
+          let   dmg      = base + Math.floor(Math.random() * variance);
+          if (eff === 'super')  dmg = Math.floor(dmg * 1.5);
+          if (eff === 'resist') dmg = Math.floor(dmg * 0.67);
+
           const newHp = Math.max(0, bossCurrentHpRef.current - dmg);
           bossCurrentHpRef.current = newHp;
           setBossCurrentHp(newHp);
@@ -828,7 +913,7 @@ function App() {
             // Auto-add boss card to dex immediately
             if (bossCardRef.current) {
               const cap = bossCardRef.current;
-              const entry: DexEntry = { name: cap.name, sprite: '' };
+              const entry: DexEntry = { name: cap.name, sprite: '', boss: true };
               setDex(prev => [...prev, entry]);
               setNewCatchCount(p => p + 1);
               fetchPokemonSprite(cap.name).then(sp => {
@@ -837,15 +922,7 @@ function App() {
             }
           }
         } else if (!isPush) {
-          const dmg   = 30 + Math.floor(Math.random() * 25);
-          const newHp = Math.max(0, fighterCurrentHpRef.current - dmg);
-          fighterCurrentHpRef.current = newHp;
-          setFighterCurrentHp(newHp);
-          setBossHandDamage({ type: 'player', amount: dmg });
-          if (newHp <= 0) {
-            bossResultRef.current = 'defeat';
-            setBossResult('defeat');
-          }
+          applyBossPlayerDamage();
         }
       }
 
@@ -1041,6 +1118,8 @@ function App() {
     bossResultRef.current = null;
     setBossResult(null);
     setBossHandDamage(null);
+    setBossEffectiveness(null);
+    setDominantType(null);
     setBossVictoryHand([]);
     setBossVictoryPicked(false);
     setBossChallenging(false);
@@ -1058,6 +1137,8 @@ function App() {
 
   const bossNextHand = () => {
     setBossHandDamage(null);
+    setBossEffectiveness(null);
+    setDominantType(null);
     setMessage('');
     setMessageType('');
     setPlayerHand([]);
@@ -1076,6 +1157,8 @@ function App() {
     bossCardRef.current = null;
     setBossCard(null);
     setBossHandDamage(null);
+    setBossEffectiveness(null);
+    setDominantType(null);
     setBossVictoryHand([]);
     setBossVictoryPicked(false);
     setBossChallenging(false);
@@ -1258,7 +1341,7 @@ function App() {
 
                 <div className="boss-combatant">
                   <div className={`card boss-card-large${getHoloEffect(bossCard.rarity) ? ' holo-' + getHoloEffect(bossCard.rarity) : ''}`}>
-                    <img src={bossCard.images.large || bossCard.images.small} alt={bossCard.name} className="card-image" />
+                    <img ref={bossCardPanelRef} src={bossCard.images.large || bossCard.images.small} alt={bossCard.name} className="card-image" />
                     {bossCard.rarity && (
                       <span className={`rarity-badge rarity-${getRarityClass(bossCard.rarity)}`}>{bossCard.rarity}</span>
                     )}
@@ -1300,9 +1383,15 @@ function App() {
               </div>
               {bossHandDamage && (
                 <div className={`boss-damage-flash${bossHandDamage.type === 'boss' ? ' dmg-boss' : ' dmg-player'}`}>
-                  {bossHandDamage.type === 'boss'
-                    ? `🗡️ ${bossCard.name} takes ${bossHandDamage.amount} damage!`
-                    : `💥 ${fighterName} takes ${bossHandDamage.amount} damage!`}
+                  {bossHandDamage.type === 'boss' ? (
+                    <>
+                      🗡️ {bossCard.name} takes {bossHandDamage.amount} damage!
+                      {bossEffectiveness === 'super'  && <span className="effectiveness-text eff-super"> It's super effective!</span>}
+                      {bossEffectiveness === 'resist' && <span className="effectiveness-text eff-resist"> Not very effective…</span>}
+                    </>
+                  ) : (
+                    `💥 ${fighterName} takes ${bossHandDamage.amount} damage!`
+                  )}
                 </div>
               )}
             </div>
@@ -1369,7 +1458,12 @@ function App() {
                       }
                       addToDex(card);
                     }}
-                    style={{ '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s` } as React.CSSProperties}
+                    style={{
+                      '--deal-delay': `${idx < 2 ? idx * 0.24 : 0}s`,
+                      ...(bossActive && gameState === 'game-over' && bossHandDamage?.type === 'boss' && dominantType && card.types.includes(dominantType)
+                        ? { boxShadow: `0 0 0 3px ${TYPE_COLORS[dominantType] ?? '#ffffff'}, 0 0 18px ${TYPE_COLORS[dominantType] ?? '#ffffff'}99, 0 0 4px rgba(0,0,0,0.8)` }
+                        : {}),
+                    } as React.CSSProperties}
                   >
                     <img src={card.images.small} alt={card.name} className="card-image" />
                     {card.rarity && (
@@ -1494,7 +1588,21 @@ function App() {
                             <div
                               key={card.id + idx}
                               className={`card boss-pick-card${getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}`}
-                              onClick={() => { addToBossVictoryDex(card); setBossVictoryPicked(true); }}
+                              onClick={(e) => {
+                                const cardRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                const dexRect  = dexBtnRef.current?.getBoundingClientRect();
+                                if (dexRect) {
+                                  setFlyingCard({
+                                    src:   card.images.small,
+                                    fromX: cardRect.left + cardRect.width  / 2,
+                                    fromY: cardRect.top  + cardRect.height / 2,
+                                    toX:   dexRect.left  + dexRect.width   / 2,
+                                    toY:   dexRect.top   + dexRect.height  / 2,
+                                  });
+                                }
+                                addToBossVictoryDex(card);
+                                setBossVictoryPicked(true);
+                              }}
                             >
                               <img src={card.images.small} alt={card.name} className="card-image" />
                               <span className="dex-capture-badge">+ DEX</span>

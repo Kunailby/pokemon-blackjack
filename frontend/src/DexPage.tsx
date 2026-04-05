@@ -4,6 +4,7 @@ import pokeballIcon from './assets/pokeball.png';
 export interface DexEntry {
   name: string;
   sprite: string;
+  boss?: boolean; // true when won as a boss fight reward
 }
 
 interface DexPageProps {
@@ -160,9 +161,16 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
   // Build a deduplicated caught list with counts
   const caughtCountMap = new Map<string, number>();
   dex.forEach(d => caughtCountMap.set(d.name, (caughtCountMap.get(d.name) ?? 0) + 1));
-  const caughtEntries = Array.from(
-    new Map(dex.map(d => [d.name, d])).values()
-  ).sort((a, b) => a.name.localeCompare(b.name));
+  const nameToEntry = new Map<string, DexEntry>();
+  for (const d of dex) {
+    const existing = nameToEntry.get(d.name);
+    if (!existing) {
+      nameToEntry.set(d.name, { ...d });
+    } else if (d.boss) {
+      existing.boss = true; // preserve boss flag if any catch was a boss reward
+    }
+  }
+  const caughtEntries = Array.from(nameToEntry.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   // Master list: all known species, or fallback to seen+caught names
   const masterList = species.length > 0 ? species : Array.from(seenSet).sort();
@@ -257,6 +265,7 @@ export default function DexPage({ dex, seen, onBack }: DexPageProps) {
                     }
                     <span className="dex-name">{entry.name}</span>
                     {count > 1 && <span className="dex-count-badge">×{count}</span>}
+                    {entry.boss && <span className="dex-boss-badge">⚔️ BOSS</span>}
                   </div>
                 );
               })}
