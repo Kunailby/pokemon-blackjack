@@ -1517,10 +1517,12 @@ function App() {
               </span>
             </div>
             <div className="hand">
-              {dealerHand.map((card, idx) => (
-                <div key={card.id + idx} className={`card${getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}`}
+              {dealerHand.map((card, idx) => {
+                const isFaceDown = gameState === 'playing' && idx === 2;
+                return (
+                <div key={card.id + idx} className={`card${!isFaceDown && getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}`}
                   style={{ '--deal-delay': `${0.12 + idx * 0.24}s` } as React.CSSProperties}>
-                  {gameState === 'playing' && idx === 2 ? (
+                  {isFaceDown ? (
                     <div className="card-back">
                       <div className="card-back-ball" />
                     </div>
@@ -1536,7 +1538,8 @@ function App() {
                     </>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
