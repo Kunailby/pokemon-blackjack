@@ -1529,12 +1529,21 @@ function App() {
                         : {}),
                     } as React.CSSProperties}
                   >
+                    <div className="card-top-bar">
+                      <div className="card-types">
+                        {card.types?.map(t => (
+                          <span key={t} className={`type-icon type-${t.toLowerCase()}`} title={t}>
+                            {t[0]}
+                          </span>
+                        ))}
+                      </div>
+                      {card.rarity && (
+                        <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
+                          {card.rarity}
+                        </span>
+                      )}
+                    </div>
                     <img src={card.images.small} alt={card.name} className="card-image" />
-                    {card.rarity && (
-                      <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
-                        {card.rarity}
-                      </span>
-                    )}
                     <span className={`card-hp${card.hp <= 60 ? ' hp-low' : card.hp <= 120 ? ' hp-mid' : ' hp-high'}`}>{card.hp} HP</span>
                     {isDexPending && <span className="dex-capture-badge">+ DEX</span>}
                   </div>
