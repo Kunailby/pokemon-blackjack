@@ -1584,7 +1584,11 @@ function App() {
                       </span>
                     )}
                     <span className={`card-hp${card.hp <= 60 ? ' hp-low' : card.hp <= 120 ? ' hp-mid' : ' hp-high'}`}>{card.hp} HP</span>
-                    {isDexPending && <span className="dex-capture-badge">+ DEX</span>}
+                    {isDexPending && (
+                      isDuplicate
+                        ? <><span className="dex-capture-badge dex-duplicate-badge">CAUGHT</span><span className="pokeball-owned" aria-hidden="true" /></>
+                        : <span className="dex-capture-badge">+ DEX</span>
+                    )}
                   </div>
                 );
               })}

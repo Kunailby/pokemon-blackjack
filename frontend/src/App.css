@@ -330,6 +330,42 @@
   white-space: nowrap;
 }
 
+/* ─── Duplicate badge (already caught) ──────────────────────────────────────── */
+.dex-duplicate-badge {
+  background: rgba(180, 30, 30, 0.85) !important;
+  color: #ffcccc !important;
+}
+
+/* Pokéball icon overlay on duplicate cards */
+.pokeball-owned {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(0,0,0,0.6);
+  background:
+    linear-gradient(to bottom, #e02020 0%, #e02020 44%, #222 44%, #222 56%, #f0f0f0 56%, #f0f0f0 100%);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Centre dot of the pokéball */
+.pokeball-owned::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f0f0f0;
+  border: 2px solid #222;
+}
+
 /* ─── Dex select controls ────────────────────────────────────────────────────── */
 .dex-select-prompt {
   font-size: 0.95rem;
