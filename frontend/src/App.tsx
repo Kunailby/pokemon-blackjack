@@ -371,6 +371,10 @@ function App() {
   // Keep winStreakRef in sync so dealerPlay (useEffect closure) always reads current value
   useEffect(() => { winStreakRef.current = winStreak; }, [winStreak]);
 
+  // Mirror unlockedAchievements in a ref so dealerPlay closures never read stale state
+  const unlockedAchievementsRef = useRef<UnlockedAchievement[]>([]);
+  useEffect(() => { unlockedAchievementsRef.current = unlockedAchievements; }, [unlockedAchievements]);
+
   // Boss fight
   const [bossChallenging, setBossChallenging]       = useState(false);
   const [bossActive, setBossActive]                 = useState(false);
@@ -387,6 +391,7 @@ function App() {
   const [dominantType, setDominantType]             = useState<string | null>(null);
   const [fighterTypes, setFighterTypes]             = useState<string[]>([]);
   const [bossAttacking, setBossAttacking]           = useState(false);
+  const [fighterHit, setFighterHit]                 = useState(false);
   const [bossVictoryHand, setBossVictoryHand]       = useState<PokemonCard[]>([]);
   const [bossVictoryPicked, setBossVictoryPicked]   = useState(false);
   const bossActiveRef       = useRef(false);
@@ -781,6 +786,7 @@ function App() {
     fighterCurrentHpRef.current = newHp;
     setFighterCurrentHp(newHp);
     setBossHandDamage({ type: 'player', amount: dmg });
+    setFighterHit(true);
     if (newHp <= 0) {
       bossResultRef.current = 'defeat';
       setBossResult('defeat');
@@ -880,6 +886,7 @@ function App() {
         playLose();
         setMessage(bossActiveRef.current ? 'The boss counters!' : 'Gym Leader wins! Train harder next time.');
         setMessageType('lose');
+        setDexPicksLeft(0); // clear any blackjack pre-set picks on a non-win
         if (!bossActiveRef.current) {
           setWinStreak(0);
           winStreakRef.current = 0;
@@ -887,10 +894,10 @@ function App() {
       } else {
         setMessage(bossActiveRef.current ? 'Tied — no damage!' : "It's a tie! Bet returned.");
         setMessageType('push');
+        setDexPicksLeft(0); // clear any blackjack pre-set picks on a non-win
         if (!bossActiveRef.current) {
           setChips(c => c + bet);
-          setWinStreak(0);
-          winStreakRef.current = 0;
+          // Pushes don't break streak — neutral outcome
         }
       }
 
@@ -972,7 +979,7 @@ function App() {
           winStreak:           newStreak,
           dealerFinalHandSize: currentDealerHand.length,
         };
-        const justEarned = checkWinAchievements(ctx, unlockedAchievements);
+        const justEarned = checkWinAchievements(ctx, unlockedAchievementsRef.current);
         if (justEarned.length > 0) {
           const now = new Date().toISOString();
           const newEntries = justEarned.map(id => ({ id, unlockedAt: now }));
@@ -1116,10 +1123,12 @@ function App() {
   const initBossFight = () => {
     // bossCard was pre-selected when bossChallenging was triggered
     const card = bossCardRef.current!;
-    bossMaxHpRef.current = card.hp;
-    setBossMaxHp(card.hp);
-    bossCurrentHpRef.current = card.hp;
-    setBossCurrentHp(card.hp);
+    // Scale boss HP independently of the card's blackjack value (which is too small for a sustained fight)
+    const bossHp = Math.max(500, card.hp * 3);
+    bossMaxHpRef.current = bossHp;
+    setBossMaxHp(bossHp);
+    bossCurrentHpRef.current = bossHp;
+    setBossCurrentHp(bossHp);
 
     fighterCurrentHpRef.current = BOSS_FIGHTER_HP;
     setFighterCurrentHp(BOSS_FIGHTER_HP);
@@ -1177,8 +1186,9 @@ function App() {
     setBossHandDamage(null);
     setBossEffectiveness(null);
     setDominantType(null);
-    setFighterTypes([]);
+    // Do NOT clear fighterTypes — fighter doesn't change between hands
     setBossAttacking(false);
+    setFighterHit(false);
     setMessage('');
     setMessageType('');
     setPlayerHand([]);
@@ -1218,6 +1228,18 @@ function App() {
     fetchPokemonSprite(card.name).then(sp => {
       if (sp) setDex(prev => prev.map(d => d.name === card.name ? { ...d, sprite: sp } : d));
     });
+    // Check dex milestone achievements (was missing — boss captures never triggered them)
+    const uniqueDexSize = new Set(updatedDex.map(d => d.name)).size;
+    const allDexNames   = updatedDex.map(d => d.name);
+    const dexEarned = checkDexAchievements(uniqueDexSize, updatedDex.length, allDexNames, unlockedAchievementsRef.current);
+    if (dexEarned.length > 0) {
+      const now = new Date().toISOString();
+      const newEntries = dexEarned.map(id => ({ id, unlockedAt: now }));
+      setUnlockedAchievements(prev => {
+        setNewAchievements(existing => [...existing, ...ACHIEVEMENTS.filter(a => dexEarned.includes(a.id))]);
+        return [...prev, ...newEntries];
+      });
+    }
   };
 
   // ── Render: Auth ──────────────────────────────────────────────────────────
@@ -1337,6 +1359,11 @@ function App() {
             </button>
           </div>
           <div className="header-right">
+            {winStreak > 0 && !bossActive && (
+              <span className="streak-badge" title={`${winStreak} win streak`}>
+                🔥{winStreak}
+              </span>
+            )}
             <span className="chips-value">${chips.toLocaleString()}</span>
             <span className="player-tag">{currentUser}</span>
             <div className="logout-wrap">
@@ -1391,6 +1418,19 @@ function App() {
                   </div>
                   <div className="combatant-info">
                     <div className="combatant-name">{bossCard.name}</div>
+                    {bossCard.weaknesses && bossCard.weaknesses.length > 0 && (
+                      <div className="boss-weakness-line">
+                        {bossCard.weaknesses.map(w => (
+                          <span
+                            key={w.type}
+                            className="boss-weakness-badge"
+                            style={{ background: (TYPE_COLORS[w.type] ?? '#888') + '33', borderColor: TYPE_COLORS[w.type] ?? '#888', color: TYPE_COLORS[w.type] ?? '#ccc' }}
+                          >
+                            ⚡{w.type}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="combatant-hp-bar">
                       <div
                         className="hp-bar-fill boss-hp-fill"
@@ -1406,7 +1446,12 @@ function App() {
                 <div className="boss-combatant">
                   <div className="fighter-sprite-wrap">
                     {fighterSprite
-                      ? <img src={fighterSprite} alt={fighterName} className="fighter-sprite" />
+                      ? <img
+                          src={fighterSprite}
+                          alt={fighterName}
+                          className={`fighter-sprite${fighterHit ? ' fighter-hit' : ''}`}
+                          onAnimationEnd={() => setFighterHit(false)}
+                        />
                       : <div className="fighter-sprite-placeholder">…</div>
                     }
                   </div>
@@ -1440,19 +1485,22 @@ function App() {
                 <div className={`boss-damage-flash${bossHandDamage.type === 'boss' ? ' dmg-boss' : ' dmg-player'}`}>
                   {bossHandDamage.type === 'boss' ? (
                     <>
-                      🗡️ {bossCard.name} takes {bossHandDamage.amount} damage!
-                      {bossEffectiveness === 'super'  && <span className="effectiveness-text eff-super"> It's super effective!</span>}
-                      {bossEffectiveness === 'resist' && <span className="effectiveness-text eff-resist"> Not very effective…</span>}
+                      <span className="dmg-number">-{bossHandDamage.amount}</span>
+                      {bossEffectiveness === 'super'  && <span className="effectiveness-text eff-super">It's super effective!</span>}
+                      {bossEffectiveness === 'resist' && <span className="effectiveness-text eff-resist">Not very effective…</span>}
                     </>
                   ) : (
-                    `💥 ${fighterName} takes ${bossHandDamage.amount} damage!`
+                    <>
+                      <span className="dmg-number dmg-number-player">-{bossHandDamage.amount}</span>
+                      <span className="dmg-label">{fighterName} takes a hit!</span>
+                    </>
                   )}
                 </div>
               )}
               {dominantType && bossHandDamage?.type === 'boss' && (
                 <div
-                  className="type-attack-label"
-                  style={{ color: TYPE_COLORS[dominantType] ?? '#fff', textShadow: `0 0 12px ${TYPE_COLORS[dominantType] ?? '#fff'}` }}
+                  className={`type-attack-label${bossEffectiveness === 'super' ? ' type-attack-super' : bossEffectiveness === 'resist' ? ' type-attack-resist' : ''}`}
+                  style={{ color: TYPE_COLORS[dominantType] ?? '#fff', textShadow: `0 0 20px ${TYPE_COLORS[dominantType] ?? '#fff'}, 0 0 40px ${TYPE_COLORS[dominantType] ?? '#fff'}88` }}
                 >
                   {dominantType} Attack!
                 </div>
@@ -1529,21 +1577,12 @@ function App() {
                         : {}),
                     } as React.CSSProperties}
                   >
-                    <div className="card-top-bar">
-                      <div className="card-types">
-                        {card.types?.map(t => (
-                          <span key={t} className={`type-icon type-${t.toLowerCase()}`} title={t}>
-                            {t[0]}
-                          </span>
-                        ))}
-                      </div>
-                      {card.rarity && (
-                        <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
-                          {card.rarity}
-                        </span>
-                      )}
-                    </div>
                     <img src={card.images.small} alt={card.name} className="card-image" />
+                    {card.rarity && (
+                      <span className={`rarity-badge rarity-${getRarityClass(card.rarity)}`}>
+                        {card.rarity}
+                      </span>
+                    )}
                     <span className={`card-hp${card.hp <= 60 ? ' hp-low' : card.hp <= 120 ? ' hp-mid' : ' hp-high'}`}>{card.hp} HP</span>
                     {isDexPending && <span className="dex-capture-badge">+ DEX</span>}
                   </div>
@@ -1697,7 +1736,7 @@ function App() {
                   <div className="boss-result-screen boss-defeat">
                     <div className="boss-result-title">💀 Knocked Out!</div>
                     <p className="boss-result-sub">{fighterName} couldn't hold on… the boss was too powerful!</p>
-                    <button className="btn-primary" onClick={endBossFight}>Try Again Later</button>
+                    <button className="btn-primary" onClick={endBossFight}>Back to Training</button>
                   </div>
                 );
               }
