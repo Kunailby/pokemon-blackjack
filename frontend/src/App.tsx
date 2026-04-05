@@ -35,6 +35,16 @@ type UserStore = Record<string, UserData>;
 type GameState = 'auth' | 'loading' | 'betting' | 'playing' | 'dealer-turn' | 'dex-select' | 'game-over';
 type Page = 'game' | 'hof' | 'dex' | 'achievements';
 
+interface StarParticle {
+  id: number;
+  x: number;   // % from left
+  y: number;   // % from top
+  size: number;
+  color: string;
+  delay: number;
+  char: string;
+}
+
 // ── Pure utilities ────────────────────────────────────────────────────────────
 
 function calculateTotal(hand: PokemonCard[]): number {
@@ -393,6 +403,22 @@ function App() {
   const [bossAttacking, setBossAttacking]           = useState(false);
   const [fighterHit, setFighterHit]                 = useState(false);
   const [dealerBustFlash, setDealerBustFlash]       = useState(false);
+  const [starParticles, setStarParticles]           = useState<StarParticle[]>([]);
+
+  const triggerStarBurst = () => {
+    const chars  = ['★', '✦', '✸', '✷', '✵', '⭐', '✨'];
+    const colors = ['#FFD700', '#FFF176', '#FFFFFF', '#FFB300', '#C8F7FF', '#FFB3CC', '#B3FFD9'];
+    setStarParticles(Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      x:     5 + Math.random() * 90,
+      y:     5 + Math.random() * 90,
+      size:  12 + Math.random() * 22,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      delay: Math.random() * 0.25,
+      char:  chars[Math.floor(Math.random() * chars.length)],
+    })));
+    setTimeout(() => setStarParticles([]), 1400);
+  };
   const [bossVictoryHand, setBossVictoryHand]       = useState<PokemonCard[]>([]);
   const [bossVictoryPicked, setBossVictoryPicked]   = useState(false);
   const bossActiveRef       = useRef(false);
@@ -878,11 +904,13 @@ function App() {
         setMessage(bossActiveRef.current ? 'Direct hit! Boss stumbled!' : 'Gym Leader busted! You win!');
         setMessageType('win');
         setDealerBustFlash(true);
+        triggerStarBurst();
         if (!bossActiveRef.current) setChips(c => c + bet * 2);
       } else if (playerTotal > dealerTotal) {
         playWin();
         setMessage(bossActiveRef.current ? 'Strike! You hit the boss!' : 'Champion! You win!');
         setMessageType('win');
+        triggerStarBurst();
         if (!bossActiveRef.current) setChips(c => c + bet * 2);
       } else if (dealerTotal > playerTotal) {
         playLose();
@@ -1322,6 +1350,28 @@ function App() {
               <span className="achievement-toast-icon">{a.icon}</span>
               <span className="achievement-toast-name">{a.name}</span>
             </div>
+          ))}
+        </div>
+      )}
+
+      {/* Win star burst */}
+      {starParticles.length > 0 && (
+        <div className="star-burst-layer" aria-hidden="true">
+          {starParticles.map(s => (
+            <span
+              key={s.id}
+              className="star-particle"
+              style={{
+                left:            `${s.x}%`,
+                top:             `${s.y}%`,
+                fontSize:        `${s.size}px`,
+                color:           s.color,
+                animationDelay:  `${s.delay}s`,
+                '--star-rotate': `${Math.random() * 360}deg`,
+              } as React.CSSProperties}
+            >
+              {s.char}
+            </span>
           ))}
         </div>
       )}

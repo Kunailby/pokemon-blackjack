@@ -1738,6 +1738,31 @@ button:focus-visible,
   .achievements-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
 }
 
+/* ─── Win star burst ─────────────────────────────────────────────────────────── */
+.star-burst-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 200;
+  overflow: hidden;
+}
+
+@keyframes star-pop {
+  0%   { transform: scale(0)    rotate(0deg);                    opacity: 0; }
+  18%  { transform: scale(1.4)  rotate(calc(var(--star-rotate) * 0.4));  opacity: 1; }
+  55%  { transform: scale(1.0)  rotate(calc(var(--star-rotate) * 0.75)); opacity: 0.85; }
+  100% { transform: scale(0.4)  rotate(var(--star-rotate));              opacity: 0; }
+}
+
+.star-particle {
+  position: absolute;
+  display: inline-block;
+  line-height: 1;
+  animation: star-pop 0.95s ease-out forwards;
+  text-shadow: 0 0 6px currentColor;
+  will-change: transform, opacity;
+}
+
 /* ─── Dealer bust overlay ────────────────────────────────────────────────────── */
 @keyframes dealer-bust-fade {
   0%   { opacity: 0;   transform: scale(0.6); }
