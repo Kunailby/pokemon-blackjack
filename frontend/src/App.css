@@ -1794,6 +1794,18 @@ button:focus-visible,
   border-radius: inherit;
 }
 
+/* Player bust overlay — same animation, orange-red tint */
+.player-bust-overlay {
+  color: #ff6600 !important;
+  text-shadow:
+    0 0 20px rgba(255, 100, 0, 0.9),
+    0 0 50px rgba(255, 60, 0, 0.6),
+    2px 2px 0 #000,
+    -2px -2px 0 #000,
+    2px -2px 0 #000,
+    -2px 2px 0 #000 !important;
+}
+
 /* ─── Boss Battle Panel ─────────────────────────────────────────────────────── */
 
 .boss-battle-panel {

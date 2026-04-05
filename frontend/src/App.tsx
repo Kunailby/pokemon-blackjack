@@ -403,6 +403,7 @@ function App() {
   const [bossAttacking, setBossAttacking]           = useState(false);
   const [fighterHit, setFighterHit]                 = useState(false);
   const [dealerBustFlash, setDealerBustFlash]       = useState(false);
+  const [playerBustFlash, setPlayerBustFlash]       = useState(false);
   const [starParticles, setStarParticles]           = useState<StarParticle[]>([]);
 
   const triggerStarBurst = () => {
@@ -798,6 +799,7 @@ function App() {
         setMessage(`Overkill! Busted on the deal at ${initialTotal} HP!`);
       }
       setMessageType('bust');
+      setPlayerBustFlash(true);
       setGameState('game-over');
     } else {
       setMessage('');
@@ -843,6 +845,7 @@ function App() {
         setMessage(`Overkill! You busted at ${total} HP!`);
       }
       setMessageType('bust');
+      setPlayerBustFlash(true);
       setGameState('game-over');
     } else if (total === 400) {
       setMessage("Perfect 400 — Gym Leader's turn.");
@@ -1604,7 +1607,15 @@ function App() {
           </div>
 
           {/* Player */}
-          <div className="panel">
+          <div className="panel" style={{ position: 'relative' }}>
+            {playerBustFlash && (
+              <div
+                className="dealer-bust-overlay player-bust-overlay"
+                onAnimationEnd={() => setPlayerBustFlash(false)}
+              >
+                BUST!
+              </div>
+            )}
             <div className="panel-label">
               Your Hand
               <span className={`total-badge${displayedPlayerTotal ? '' : ' hidden'}${displayedPlayerTotal === 400 ? ' perfect' : displayedPlayerTotal >= 381 ? ' danger' : displayedPlayerTotal >= 320 ? ' caution' : ''}`}>{displayedPlayerTotal} HP</span>
