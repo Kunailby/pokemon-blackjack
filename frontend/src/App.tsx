@@ -392,6 +392,7 @@ function App() {
   const [fighterTypes, setFighterTypes]             = useState<string[]>([]);
   const [bossAttacking, setBossAttacking]           = useState(false);
   const [fighterHit, setFighterHit]                 = useState(false);
+  const [dealerBustFlash, setDealerBustFlash]       = useState(false);
   const [bossVictoryHand, setBossVictoryHand]       = useState<PokemonCard[]>([]);
   const [bossVictoryPicked, setBossVictoryPicked]   = useState(false);
   const bossActiveRef       = useRef(false);
@@ -876,6 +877,7 @@ function App() {
         playWin();
         setMessage(bossActiveRef.current ? 'Direct hit! Boss stumbled!' : 'Gym Leader busted! You win!');
         setMessageType('win');
+        setDealerBustFlash(true);
         if (!bossActiveRef.current) setChips(c => c + bet * 2);
       } else if (playerTotal > dealerTotal) {
         playWin();
@@ -1509,7 +1511,15 @@ function App() {
           )}
 
           {/* Gym Leader */}
-          <div className="panel">
+          <div className="panel" style={{ position: 'relative' }}>
+            {dealerBustFlash && (
+              <div
+                className="dealer-bust-overlay"
+                onAnimationEnd={() => setDealerBustFlash(false)}
+              >
+                BUST!
+              </div>
+            )}
             <div className="panel-label">
               Gym Leader
               <span className={`total-badge${showDealerTotal ? '' : ' hidden'}`}>
