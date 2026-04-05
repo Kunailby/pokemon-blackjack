@@ -179,6 +179,21 @@ function selectBossCard(cards: PokemonCard[]): PokemonCard {
   return cards[Math.floor(Math.random() * cards.length)];
 }
 
+// Resolve a caught Pokémon's TCG card (for its types) by matching dex name against allCards
+function findFighterCard(dexName: string, cards: PokemonCard[]): PokemonCard | null {
+  const norm = (s: string) =>
+    s.toLowerCase()
+      .replace(/\s*(ex|gx|v|vmax|vstar|break|lv\.x)$/i, '')
+      .replace(/[^a-z0-9]/g, '');
+  const target = norm(dexName);
+  return (
+    cards.find(c => norm(c.name) === target) ??
+    cards.find(c => norm(c.name).startsWith(target)) ??
+    cards.find(c => target.startsWith(norm(c.name))) ??
+    null
+  );
+}
+
 const FIGHTER_POKEMON = [
   'charizard','blastoise','venusaur','pikachu','mewtwo','gengar','machamp',
   'alakazam','snorlax','dragonite','gyarados','lapras','typhlosion','feraligatr',
@@ -370,6 +385,8 @@ function App() {
   const [bossHandDamage, setBossHandDamage]         = useState<{ type: 'boss' | 'player'; amount: number } | null>(null);
   const [bossEffectiveness, setBossEffectiveness]   = useState<'super' | 'resist' | 'normal' | null>(null);
   const [dominantType, setDominantType]             = useState<string | null>(null);
+  const [fighterTypes, setFighterTypes]             = useState<string[]>([]);
+  const [bossAttacking, setBossAttacking]           = useState(false);
   const [bossVictoryHand, setBossVictoryHand]       = useState<PokemonCard[]>([]);
   const [bossVictoryPicked, setBossVictoryPicked]   = useState(false);
   const bossActiveRef       = useRef(false);
@@ -899,8 +916,8 @@ function App() {
           const base     = Math.floor(bossMaxHpRef.current / 5);
           const variance = Math.max(1, Math.floor(bossMaxHpRef.current / 10));
           let   dmg      = base + Math.floor(Math.random() * variance);
-          if (eff === 'super')  dmg = Math.floor(dmg * 1.5);
-          if (eff === 'resist') dmg = Math.floor(dmg * 0.67);
+          if (eff === 'super')  dmg = Math.floor(dmg * 2.0);
+          if (eff === 'resist') dmg = Math.floor(dmg * 0.75);
 
           const newHp = Math.max(0, bossCurrentHpRef.current - dmg);
           bossCurrentHpRef.current = newHp;
@@ -922,6 +939,7 @@ function App() {
             }
           }
         } else if (!isPush) {
+          setBossAttacking(true);
           applyBossPlayerDamage();
         }
       }
@@ -1107,11 +1125,25 @@ function App() {
     setFighterCurrentHp(BOSS_FIGHTER_HP);
     setFighterMaxHp(BOSS_FIGHTER_HP);
 
-    const slug = FIGHTER_POKEMON[Math.floor(Math.random() * FIGHTER_POKEMON.length)];
-    const name = slug.charAt(0).toUpperCase() + slug.slice(1);
-    setFighterName(name);
-    setFighterSprite('');
-    fetchPokemonSprite(name).then(sp => setFighterSprite(sp));
+    // Pick fighter from player's caught Pokémon; fall back to hardcoded list if dex is empty
+    let pickedName: string;
+    if (dex.length > 0) {
+      const pick = dex[Math.floor(Math.random() * dex.length)];
+      pickedName = pick.name;
+      // If the dex entry already has a sprite, use it immediately
+      if (pick.sprite) {
+        setFighterSprite(pick.sprite);
+      } else {
+        setFighterSprite('');
+        fetchPokemonSprite(pickedName).then(sp => setFighterSprite(sp));
+      }
+    } else {
+      const slug = FIGHTER_POKEMON[Math.floor(Math.random() * FIGHTER_POKEMON.length)];
+      pickedName = slug.charAt(0).toUpperCase() + slug.slice(1);
+      setFighterSprite('');
+      fetchPokemonSprite(pickedName).then(sp => setFighterSprite(sp));
+    }
+    setFighterName(pickedName);
 
     bossActiveRef.current = true;
     setBossActive(true);
@@ -1120,9 +1152,15 @@ function App() {
     setBossHandDamage(null);
     setBossEffectiveness(null);
     setDominantType(null);
+    setFighterTypes([]);
+    setBossAttacking(false);
     setBossVictoryHand([]);
     setBossVictoryPicked(false);
     setBossChallenging(false);
+
+    // Resolve the fighter's TCG card so we can show its types
+    const fighterCard = findFighterCard(pickedName, allCards);
+    setFighterTypes(fighterCard?.types ?? []);
 
     setBet(0);
     setPlayerHand([]);
@@ -1139,6 +1177,8 @@ function App() {
     setBossHandDamage(null);
     setBossEffectiveness(null);
     setDominantType(null);
+    setFighterTypes([]);
+    setBossAttacking(false);
     setMessage('');
     setMessageType('');
     setPlayerHand([]);
@@ -1159,6 +1199,8 @@ function App() {
     setBossHandDamage(null);
     setBossEffectiveness(null);
     setDominantType(null);
+    setFighterTypes([]);
+    setBossAttacking(false);
     setBossVictoryHand([]);
     setBossVictoryPicked(false);
     setBossChallenging(false);
@@ -1340,7 +1382,7 @@ function App() {
               <div className="boss-combatants">
 
                 <div className="boss-combatant">
-                  <div className={`card boss-card-large${getHoloEffect(bossCard.rarity) ? ' holo-' + getHoloEffect(bossCard.rarity) : ''}`}>
+                  <div className={`card boss-card-large${getHoloEffect(bossCard.rarity) ? ' holo-' + getHoloEffect(bossCard.rarity) : ''}${bossAttacking ? ' boss-card-hit' : ''}`}>
                     <img ref={bossCardPanelRef} src={bossCard.images.large || bossCard.images.small} alt={bossCard.name} className="card-image" />
                     {bossCard.rarity && (
                       <span className={`rarity-badge rarity-${getRarityClass(bossCard.rarity)}`}>{bossCard.rarity}</span>
@@ -1368,6 +1410,19 @@ function App() {
                       : <div className="fighter-sprite-placeholder">…</div>
                     }
                   </div>
+                  {fighterTypes.length > 0 && (
+                    <div className="fighter-type-badges">
+                      {fighterTypes.map(t => (
+                        <span
+                          key={t}
+                          className="fighter-type-badge"
+                          style={{ background: (TYPE_COLORS[t] ?? '#888') + '33', borderColor: TYPE_COLORS[t] ?? '#888', color: TYPE_COLORS[t] ?? '#ccc' }}
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="combatant-info">
                     <div className="combatant-name">{fighterName || '…'}</div>
                     <div className="combatant-hp-bar">
@@ -1392,6 +1447,14 @@ function App() {
                   ) : (
                     `💥 ${fighterName} takes ${bossHandDamage.amount} damage!`
                   )}
+                </div>
+              )}
+              {dominantType && bossHandDamage?.type === 'boss' && (
+                <div
+                  className="type-attack-label"
+                  style={{ color: TYPE_COLORS[dominantType] ?? '#fff', textShadow: `0 0 12px ${TYPE_COLORS[dominantType] ?? '#fff'}` }}
+                >
+                  {dominantType} Attack!
                 </div>
               )}
             </div>
@@ -1439,10 +1502,11 @@ function App() {
               {playerHand.map((card, idx) => {
                 const isDexPending = gameState === 'dex-select' && pendingDexCards.some(c => c.name === card.name) && dexPicksLeft > 0;
                 const isDuplicate  = isDexPending && dex.some(d => d.name === card.name);
+                const isAttacking  = bossActive && dominantType !== null && card.types.includes(dominantType) && bossHandDamage?.type === 'boss';
                 return (
                   <div
                     key={card.id + idx}
-                    className={`card${isDexPending ? (isDuplicate ? ' dex-duplicate' : ' dex-eligible') : ''}${getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}`}
+                    className={`card${isDexPending ? (isDuplicate ? ' dex-duplicate' : ' dex-eligible') : ''}${getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}${isAttacking ? ' card-attacking' : ''}`}
                     onClick={(e) => {
                       if (!isDexPending) return;
                       const cardRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
