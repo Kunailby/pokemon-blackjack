@@ -1701,3 +1701,407 @@ button:focus-visible,
 @media (max-width: 600px) {
   .achievements-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
 }
+
+/* ─── Boss Battle Panel ─────────────────────────────────────────────────────── */
+
+.boss-battle-panel {
+  background: linear-gradient(160deg, #0d0a1a 0%, #1a0a2e 60%, #0a1225 100%);
+  border: 2px solid rgba(180, 60, 255, 0.5);
+  border-radius: 16px;
+  padding: 16px 20px 12px;
+  margin: 12px 0;
+  box-shadow:
+    0 0 30px rgba(160, 40, 255, 0.25),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  animation: boss-panel-glow 3s ease-in-out infinite;
+}
+
+@keyframes boss-panel-glow {
+  0%, 100% { box-shadow: 0 0 30px rgba(160, 40, 255, 0.25), inset 0 1px 0 rgba(255,255,255,0.05); }
+  50%       { box-shadow: 0 0 50px rgba(200, 80, 255, 0.40), inset 0 1px 0 rgba(255,255,255,0.05); }
+}
+
+.boss-battle-header {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.25em;
+  color: #d080ff;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+.boss-combatants {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+}
+
+.boss-combatant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  max-width: 180px;
+}
+
+/* Boss card — sized like a real card but slightly larger */
+.boss-card-large {
+  width: 120px;
+  aspect-ratio: 2.5 / 3.5;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+  flex-shrink: 0;
+}
+
+.boss-card-large .card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* Fighter sprite */
+.fighter-sprite-wrap {
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.04);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.fighter-sprite {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(120, 200, 255, 0.6));
+  animation: fighter-idle 1.8s ease-in-out infinite;
+}
+
+@keyframes fighter-idle {
+  0%, 100% { transform: translateY(0);    }
+  50%       { transform: translateY(-4px); }
+}
+
+.fighter-sprite-placeholder {
+  font-size: 2rem;
+  color: rgba(255,255,255,0.3);
+}
+
+/* Combatant info block */
+.combatant-info {
+  width: 100%;
+  text-align: center;
+}
+
+.combatant-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #e8d5ff;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.combatant-hp-bar {
+  height: 10px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.hp-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.boss-hp-fill {
+  background: linear-gradient(90deg, #ff2244, #ff6600, #ffaa00);
+  box-shadow: 0 0 8px rgba(255, 60, 0, 0.6);
+}
+
+.player-hp-fill {
+  background: linear-gradient(90deg, #00cc66, #44ff88);
+  box-shadow: 0 0 8px rgba(0, 200, 100, 0.6);
+}
+
+.combatant-hp-text {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+/* VS badge */
+.boss-vs {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #d080ff;
+  padding-top: 40px;
+  flex-shrink: 0;
+  text-shadow: 0 0 12px rgba(200, 80, 255, 0.8);
+}
+
+/* Damage flash banner */
+.boss-damage-flash {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-top: 12px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  animation: damage-pop 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.boss-damage-flash.dmg-boss   { background: rgba(255, 80, 0,  0.25); color: #ff9944; border: 1px solid rgba(255,100,0,0.3); }
+.boss-damage-flash.dmg-player { background: rgba(255, 20, 60, 0.25); color: #ff5577; border: 1px solid rgba(255,40,80,0.3); }
+
+@keyframes damage-pop {
+  0%   { transform: scale(0.8); opacity: 0; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+/* ─── Boss Challenge Overlay ─────────────────────────────────────────────────── */
+
+.boss-challenge-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  animation: boss-challenge-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes boss-challenge-in {
+  from { opacity: 0; transform: scale(0.88) translateY(16px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+.boss-challenge-title {
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: #d080ff;
+  text-shadow: 0 0 16px rgba(200,80,255,0.8);
+  letter-spacing: 0.06em;
+}
+
+.boss-challenge-sub {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.6);
+  text-align: center;
+  margin: 0;
+}
+
+.boss-challenge-card {
+  width: 110px;
+  aspect-ratio: 2.5 / 3.5;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 24px rgba(180,60,255,0.4);
+}
+
+.boss-challenge-card .card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.boss-challenge-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e8d5ff;
+  margin: 0;
+}
+
+.boss-challenge-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.btn-boss-fight {
+  background: linear-gradient(135deg, #8b00ff, #d030ff);
+  border: none;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  box-shadow: 0 4px 16px rgba(180, 0, 255, 0.5);
+}
+
+.btn-boss-fight:hover {
+  background: linear-gradient(135deg, #a020ff, #e040ff);
+  box-shadow: 0 6px 24px rgba(200, 0, 255, 0.6);
+  transform: translateY(-2px);
+}
+
+.btn-boss-skip {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.6);
+  font-size: 0.85rem;
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-boss-skip:hover {
+  background: rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.9);
+}
+
+/* ─── Boss Betting (free hands) ──────────────────────────────────────────────── */
+
+.boss-betting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.boss-betting-label {
+  font-size: 0.9rem;
+  color: #d080ff;
+  font-weight: 700;
+  text-align: center;
+  margin: 0;
+}
+
+.btn-boss-next {
+  background: linear-gradient(135deg, #6600cc, #b030ee);
+  border: none;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 12px 32px;
+  border-radius: 12px;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(150, 0, 255, 0.45);
+  transition: all 0.2s;
+}
+
+.btn-boss-next:hover {
+  background: linear-gradient(135deg, #8800ee, #cc44ff);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(180, 0, 255, 0.55);
+}
+
+/* ─── Boss Result Screens ────────────────────────────────────────────────────── */
+
+.boss-result-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  animation: boss-result-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes boss-result-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+
+.boss-result-title {
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.boss-victory .boss-result-title {
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.7);
+}
+
+.boss-defeat .boss-result-title {
+  color: #ff4455;
+  text-shadow: 0 0 20px rgba(255, 60, 80, 0.6);
+}
+
+.boss-result-sub {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  margin: 0;
+  max-width: 280px;
+}
+
+.boss-pick-prompt {
+  font-size: 0.85rem;
+  color: #a0e0ff;
+  font-weight: 600;
+  text-align: center;
+  margin: 0;
+}
+
+.boss-victory-hand {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.boss-pick-card {
+  width: 80px;
+  aspect-ratio: 2.5 / 3.5;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(0, 220, 160, 0.6), 0 4px 16px rgba(0,0,0,0.6);
+  transition: transform 0.15s, box-shadow 0.15s;
+  border: 2px solid rgba(0, 220, 160, 0.7);
+}
+
+.boss-pick-card:hover {
+  transform: scale(1.08) translateY(-4px);
+  box-shadow: 0 0 24px rgba(0, 220, 160, 0.9), 0 8px 24px rgba(0,0,0,0.7);
+}
+
+.boss-pick-card .card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.btn-boss-continue {
+  background: linear-gradient(135deg, #cc9900, #ffdd00);
+  color: #1a1400;
+  font-weight: 900;
+  border: none;
+  padding: 12px 32px;
+  border-radius: 12px;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(255, 200, 0, 0.45);
+  transition: all 0.2s;
+}
+
+.btn-boss-continue:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(255, 215, 0, 0.6);
+}
+
+@media (max-width: 480px) {
+  .boss-combatants   { gap: 10px; }
+  .boss-card-large   { width: 90px; }
+  .fighter-sprite-wrap { width: 72px; height: 72px; }
+  .fighter-sprite    { width: 60px; height: 60px; }
+  .combatant-name    { font-size: 0.72rem; }
+  .boss-challenge-title { font-size: 1.2rem; }
+}

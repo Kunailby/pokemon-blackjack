@@ -145,6 +145,34 @@ function getHoloEffect(rarity: string): string {
   return '';
 }
 
+// ── Boss fight helpers ────────────────────────────────────────────────────────
+
+function selectBossCard(cards: PokemonCard[]): PokemonCard {
+  const isPremium = (c: PokemonCard) => {
+    const r = c.rarity.toLowerCase();
+    return r.includes('ex') || r.includes('gx') || r.includes('vmax') || r.includes('vstar') ||
+           r.includes(' v ') || r === 'v' || r.includes('illustration rare') ||
+           r.includes('full art') || r.includes('secret') || r.includes('ultra rare');
+  };
+  const elite = cards.filter(c => isPremium(c) && c.hp >= 200);
+  if (elite.length) return elite[Math.floor(Math.random() * elite.length)];
+  const highHp = cards.filter(c => c.hp >= 200);
+  if (highHp.length) return highHp[Math.floor(Math.random() * highHp.length)];
+  const premium = cards.filter(isPremium);
+  if (premium.length) return premium[Math.floor(Math.random() * premium.length)];
+  return cards[Math.floor(Math.random() * cards.length)];
+}
+
+const FIGHTER_POKEMON = [
+  'charizard','blastoise','venusaur','pikachu','mewtwo','gengar','machamp',
+  'alakazam','snorlax','dragonite','gyarados','lapras','typhlosion','feraligatr',
+  'meganium','espeon','umbreon','ampharos','blaziken','swampert','sceptile',
+  'gardevoir','salamence','metagross','garchomp','lucario','infernape','empoleon',
+  'leafeon','glaceon','luxray','togekiss','gallade','haxorus','goodra',
+];
+
+const BOSS_FIGHTER_HP = 200;
+
 const BONUS_MS = 24 * 60 * 60 * 1000;
 
 function canClaimBonus(last: string): boolean {
@@ -311,6 +339,27 @@ function App() {
 
   // Keep winStreakRef in sync so dealerPlay (useEffect closure) always reads current value
   useEffect(() => { winStreakRef.current = winStreak; }, [winStreak]);
+
+  // Boss fight
+  const [bossChallenging, setBossChallenging]       = useState(false);
+  const [bossActive, setBossActive]                 = useState(false);
+  const [bossCard, setBossCard]                     = useState<PokemonCard | null>(null);
+  const [bossCurrentHp, setBossCurrentHp]           = useState(0);
+  const [bossMaxHp, setBossMaxHp]                   = useState(0);
+  const [fighterName, setFighterName]               = useState('');
+  const [fighterSprite, setFighterSprite]           = useState('');
+  const [fighterCurrentHp, setFighterCurrentHp]     = useState(0);
+  const [fighterMaxHp, setFighterMaxHp]             = useState(BOSS_FIGHTER_HP);
+  const [bossResult, setBossResult]                 = useState<'victory' | 'defeat' | null>(null);
+  const [bossHandDamage, setBossHandDamage]         = useState<{ type: 'boss' | 'player'; amount: number } | null>(null);
+  const [bossVictoryHand, setBossVictoryHand]       = useState<PokemonCard[]>([]);
+  const [bossVictoryPicked, setBossVictoryPicked]   = useState(false);
+  const bossActiveRef       = useRef(false);
+  const bossCurrentHpRef    = useRef(0);
+  const bossMaxHpRef        = useRef(0);
+  const fighterCurrentHpRef = useRef(0);
+  const bossResultRef       = useRef<'victory' | 'defeat' | null>(null);
+  const bossCardRef         = useRef<PokemonCard | null>(null);
 
   // Auto-dismiss achievement toast after 4 seconds
   useEffect(() => {
@@ -606,7 +655,7 @@ function App() {
 
   // ── Start game ────────────────────────────────────────────────────────────
   const startGame = () => {
-    if (bet === 0) { setMessage('Place a bet first!'); return; }
+    if (bet === 0 && !bossActiveRef.current) { setMessage('Place a bet first!'); return; }
 
     // Reset picks unconditionally so no stale value from a prior round leaks in
     setDexPicksLeft(0);
@@ -615,8 +664,8 @@ function App() {
     // Reset hit counter for this round
     hitCountRef.current = 0;
 
-    // Record dex eligibility: bet must be ≥ 10% of chips BEFORE deduction
-    isDexEligibleRef.current = bet >= chips * 0.1;
+    // Dex capture disabled during boss fight (boss victory gives special reward instead)
+    isDexEligibleRef.current = !bossActiveRef.current && (bet >= chips * 0.1);
 
     // Always build a fresh deck from the full card pool — no shoe caching
     const newDeck = buildDeck(allCards);
@@ -641,7 +690,7 @@ function App() {
     setDeck(newDeck);
     setPlayerHand([p1, p2]);
     setDealerHand([d1, d2, d3]);
-    setChips(c => c - bet);
+    if (!bossActiveRef.current) setChips(c => c - bet);
     setPendingDexCards([]);
     setMessageType('');
 
@@ -731,39 +780,88 @@ function App() {
         setPersonalHof(prev => [...prev, entry].sort((a, b) => b.bet - a.bet || Number(b.id) - Number(a.id)).slice(0, 10));
       };
 
-      const isWin = dealerTotal > 400 || playerTotal > dealerTotal;
+      const isWin  = dealerTotal > 400 || playerTotal > dealerTotal;
+      const isPush = !isWin && dealerTotal === playerTotal;
 
       if (dealerTotal > 400) {
         playWin();
-        setMessage('Gym Leader busted! You win!');
+        setMessage(bossActiveRef.current ? 'Direct hit! Boss stumbled!' : 'Gym Leader busted! You win!');
         setMessageType('win');
-        setChips(c => c + bet * 2);
+        if (!bossActiveRef.current) setChips(c => c + bet * 2);
       } else if (playerTotal > dealerTotal) {
         playWin();
-        setMessage('Champion! You win!');
+        setMessage(bossActiveRef.current ? 'Strike! You hit the boss!' : 'Champion! You win!');
         setMessageType('win');
-        setChips(c => c + bet * 2);
+        if (!bossActiveRef.current) setChips(c => c + bet * 2);
       } else if (dealerTotal > playerTotal) {
         playLose();
-        setMessage('Gym Leader wins! Train harder next time.');
+        setMessage(bossActiveRef.current ? 'The boss counters!' : 'Gym Leader wins! Train harder next time.');
         setMessageType('lose');
-        // Reset streak on loss
-        setWinStreak(0);
-        winStreakRef.current = 0;
+        if (!bossActiveRef.current) {
+          setWinStreak(0);
+          winStreakRef.current = 0;
+        }
       } else {
-        setMessage("It's a tie! Bet returned.");
+        setMessage(bossActiveRef.current ? 'Tied — no damage!' : "It's a tie! Bet returned.");
         setMessageType('push');
-        setChips(c => c + bet);
-        // Reset streak on push
-        setWinStreak(0);
-        winStreakRef.current = 0;
+        if (!bossActiveRef.current) {
+          setChips(c => c + bet);
+          setWinStreak(0);
+          winStreakRef.current = 0;
+        }
       }
 
-      if (isWin) {
+      // ── Boss fight damage ─────────────────────────────────────────────────
+      if (bossActiveRef.current && bossResultRef.current === null) {
+        if (isWin) {
+          const base     = Math.floor(bossMaxHpRef.current / 5);
+          const variance = Math.max(1, Math.floor(bossMaxHpRef.current / 10));
+          const dmg  = base + Math.floor(Math.random() * variance);
+          const newHp = Math.max(0, bossCurrentHpRef.current - dmg);
+          bossCurrentHpRef.current = newHp;
+          setBossCurrentHp(newHp);
+          setBossHandDamage({ type: 'boss', amount: dmg });
+          if (newHp <= 0) {
+            bossResultRef.current = 'victory';
+            setBossResult('victory');
+            setBossVictoryHand([...playerHand]);
+            // Auto-add boss card to dex immediately
+            if (bossCardRef.current) {
+              const cap = bossCardRef.current;
+              const entry: DexEntry = { name: cap.name, sprite: '' };
+              setDex(prev => [...prev, entry]);
+              setNewCatchCount(p => p + 1);
+              fetchPokemonSprite(cap.name).then(sp => {
+                if (sp) setDex(prev => prev.map(d => d.name === cap.name ? { ...d, sprite: sp } : d));
+              });
+            }
+          }
+        } else if (!isPush) {
+          const dmg   = 30 + Math.floor(Math.random() * 25);
+          const newHp = Math.max(0, fighterCurrentHpRef.current - dmg);
+          fighterCurrentHpRef.current = newHp;
+          setFighterCurrentHp(newHp);
+          setBossHandDamage({ type: 'player', amount: dmg });
+          if (newHp <= 0) {
+            bossResultRef.current = 'defeat';
+            setBossResult('defeat');
+          }
+        }
+      }
+
+      if (isWin && !bossActiveRef.current) {
         // Increment streak before achievement check so streak achievements trigger correctly
         const newStreak = winStreakRef.current + 1;
         winStreakRef.current = newStreak;
         setWinStreak(newStreak);
+
+        // Trigger boss challenge every 3rd win
+        if (newStreak % 3 === 0) {
+          const challengeCard = selectBossCard(allCards);
+          bossCardRef.current = challengeCard;
+          setBossCard(challengeCard);
+          setBossChallenging(true);
+        }
 
         // Check win achievements
         const ctx = {
@@ -898,6 +996,14 @@ function App() {
     setWinStreak(0);
     winStreakRef.current = 0;
     setNewAchievements([]);
+    bossActiveRef.current = false;
+    setBossActive(false);
+    bossResultRef.current = null;
+    setBossResult(null);
+    bossCardRef.current = null;
+    setBossCard(null);
+    setBossChallenging(false);
+    setBossHandDamage(null);
     setLogoutConfirm(false);
     setGameState('auth');
   };
@@ -909,6 +1015,84 @@ function App() {
     setMessageType('');
     setMessage(chips <= 0 ? '' : 'Place your bet!');
     setGameState('betting');
+  };
+
+  // ── Boss fight functions ───────────────────────────────────────────────────
+  const initBossFight = () => {
+    // bossCard was pre-selected when bossChallenging was triggered
+    const card = bossCardRef.current!;
+    bossMaxHpRef.current = card.hp;
+    setBossMaxHp(card.hp);
+    bossCurrentHpRef.current = card.hp;
+    setBossCurrentHp(card.hp);
+
+    fighterCurrentHpRef.current = BOSS_FIGHTER_HP;
+    setFighterCurrentHp(BOSS_FIGHTER_HP);
+    setFighterMaxHp(BOSS_FIGHTER_HP);
+
+    const slug = FIGHTER_POKEMON[Math.floor(Math.random() * FIGHTER_POKEMON.length)];
+    const name = slug.charAt(0).toUpperCase() + slug.slice(1);
+    setFighterName(name);
+    setFighterSprite('');
+    fetchPokemonSprite(name).then(sp => setFighterSprite(sp));
+
+    bossActiveRef.current = true;
+    setBossActive(true);
+    bossResultRef.current = null;
+    setBossResult(null);
+    setBossHandDamage(null);
+    setBossVictoryHand([]);
+    setBossVictoryPicked(false);
+    setBossChallenging(false);
+
+    setBet(0);
+    setPlayerHand([]);
+    setDealerHand([]);
+    setDisplayedPlayerTotal(0);
+    setPendingDexCards([]);
+    setDexPicksLeft(0);
+    setMessageType('');
+    setMessage('The boss challenges you!');
+    setGameState('betting');
+  };
+
+  const bossNextHand = () => {
+    setBossHandDamage(null);
+    setMessage('');
+    setMessageType('');
+    setPlayerHand([]);
+    setDealerHand([]);
+    setDisplayedPlayerTotal(0);
+    setPendingDexCards([]);
+    setDexPicksLeft(0);
+    startGame(); // bet is already 0 in boss mode; startGame allows this
+  };
+
+  const endBossFight = () => {
+    bossActiveRef.current = false;
+    setBossActive(false);
+    bossResultRef.current = null;
+    setBossResult(null);
+    bossCardRef.current = null;
+    setBossCard(null);
+    setBossHandDamage(null);
+    setBossVictoryHand([]);
+    setBossVictoryPicked(false);
+    setBossChallenging(false);
+    // Reset streak so the fight itself doesn't re-trigger a challenge immediately
+    setWinStreak(0);
+    winStreakRef.current = 0;
+    newRound();
+  };
+
+  const addToBossVictoryDex = (card: PokemonCard) => {
+    const entry: DexEntry = { name: card.name, sprite: '' };
+    const updatedDex = [...dex, entry];
+    setDex(updatedDex);
+    setNewCatchCount(prev => prev + 1);
+    fetchPokemonSprite(card.name).then(sp => {
+      if (sp) setDex(prev => prev.map(d => d.name === card.name ? { ...d, sprite: sp } : d));
+    });
   };
 
   // ── Render: Auth ──────────────────────────────────────────────────────────
@@ -1066,6 +1250,64 @@ function App() {
         {/* Play area — hidden when broke at betting screen */}
         {(chips >= 5 || gameState !== 'betting') && <>
 
+          {/* Boss battle panel */}
+          {bossActive && bossCard && (
+            <div className="boss-battle-panel">
+              <div className="boss-battle-header">⚔️ BOSS BATTLE</div>
+              <div className="boss-combatants">
+
+                <div className="boss-combatant">
+                  <div className={`card boss-card-large${getHoloEffect(bossCard.rarity) ? ' holo-' + getHoloEffect(bossCard.rarity) : ''}`}>
+                    <img src={bossCard.images.large || bossCard.images.small} alt={bossCard.name} className="card-image" />
+                    {bossCard.rarity && (
+                      <span className={`rarity-badge rarity-${getRarityClass(bossCard.rarity)}`}>{bossCard.rarity}</span>
+                    )}
+                    <span className="card-hp hp-high">{bossCard.hp} HP</span>
+                  </div>
+                  <div className="combatant-info">
+                    <div className="combatant-name">{bossCard.name}</div>
+                    <div className="combatant-hp-bar">
+                      <div
+                        className="hp-bar-fill boss-hp-fill"
+                        style={{ width: `${Math.max(0, (bossCurrentHp / bossMaxHp) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="combatant-hp-text">{bossCurrentHp} / {bossMaxHp} HP</div>
+                  </div>
+                </div>
+
+                <div className="boss-vs">VS</div>
+
+                <div className="boss-combatant">
+                  <div className="fighter-sprite-wrap">
+                    {fighterSprite
+                      ? <img src={fighterSprite} alt={fighterName} className="fighter-sprite" />
+                      : <div className="fighter-sprite-placeholder">…</div>
+                    }
+                  </div>
+                  <div className="combatant-info">
+                    <div className="combatant-name">{fighterName || '…'}</div>
+                    <div className="combatant-hp-bar">
+                      <div
+                        className="hp-bar-fill player-hp-fill"
+                        style={{ width: `${Math.max(0, (fighterCurrentHp / fighterMaxHp) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="combatant-hp-text">{fighterCurrentHp} / {fighterMaxHp} HP</div>
+                  </div>
+                </div>
+
+              </div>
+              {bossHandDamage && (
+                <div className={`boss-damage-flash${bossHandDamage.type === 'boss' ? ' dmg-boss' : ' dmg-player'}`}>
+                  {bossHandDamage.type === 'boss'
+                    ? `🗡️ ${bossCard.name} takes ${bossHandDamage.amount} damage!`
+                    : `💥 ${fighterName} takes ${bossHandDamage.amount} damage!`}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Gym Leader */}
           <div className="panel">
             <div className="panel-label">
@@ -1152,33 +1394,61 @@ function App() {
 
           {/* Controls */}
           <div className="controls-panel">
+
+            {/* Boss challenge popup — overlays the normal game-over button */}
+            {bossChallenging && gameState === 'game-over' && bossCard && (
+              <div className="boss-challenge-overlay">
+                <div className="boss-challenge-title">⚔️ BOSS APPEARS!</div>
+                <p className="boss-challenge-sub">3 wins in a row — a powerful trainer challenges you!</p>
+                <div className={`card boss-challenge-card${getHoloEffect(bossCard.rarity) ? ' holo-' + getHoloEffect(bossCard.rarity) : ''}`}>
+                  <img src={bossCard.images.large || bossCard.images.small} alt={bossCard.name} className="card-image" />
+                  {bossCard.rarity && (
+                    <span className={`rarity-badge rarity-${getRarityClass(bossCard.rarity)}`}>{bossCard.rarity}</span>
+                  )}
+                  <span className="card-hp hp-high">{bossCard.hp} HP</span>
+                </div>
+                <p className="boss-challenge-name">{bossCard.name} — {bossCard.hp} HP</p>
+                <div className="boss-challenge-buttons">
+                  <button className="btn-primary btn-boss-fight" onClick={initBossFight}>⚔️ Fight Boss</button>
+                  <button className="btn-secondary btn-boss-skip" onClick={() => { setBossChallenging(false); newRound(); }}>Skip</button>
+                </div>
+              </div>
+            )}
+
             {gameState === 'betting' && (
-              <>
-                <div className="bet-summary">
-                  <span className="bet-display">
-                    {bet > 0
-                      ? <>Bet: <strong>${bet}</strong></>
-                      : <span className="bet-empty">No bet placed</span>}
-                  </span>
-                  {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
+              bossActive ? (
+                <div className="boss-betting">
+                  <p className="boss-betting-label">⚔️ Boss battle — hands are free!</p>
+                  <button className="btn-primary btn-boss-next" onClick={startGame}>Deal Hand ⚔️</button>
                 </div>
-                <div className="bet-row">
-                  {[5, 10, 25, 50, 100].map(amount => (
-                    <button key={amount} className="chip-btn"
-                      onClick={() => placeBet(amount)} disabled={bet + amount > chips}>
-                      +${amount}
-                    </button>
-                  ))}
-                </div>
-                <p className="dex-threshold-hint">
-                  {bet >= chips * 0.1
-                    ? <span className="dex-unlocked">🎴 Dex capture unlocked</span>
-                    : `Bet $${Math.max(5, Math.ceil(chips * 0.1))}+ to unlock Dex capture`}
-                </p>
-                <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>
-                  Deal
-                </button>
-              </>
+              ) : (
+                <>
+                  <div className="bet-summary">
+                    <span className="bet-display">
+                      {bet > 0
+                        ? <>Bet: <strong>${bet}</strong></>
+                        : <span className="bet-empty">No bet placed</span>}
+                    </span>
+                    {bet > 0 && <button className="clear-btn" onClick={clearBet}>Clear</button>}
+                  </div>
+                  <div className="bet-row">
+                    {[5, 10, 25, 50, 100].map(amount => (
+                      <button key={amount} className="chip-btn"
+                        onClick={() => placeBet(amount)} disabled={bet + amount > chips}>
+                        +${amount}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="dex-threshold-hint">
+                    {bet >= chips * 0.1
+                      ? <span className="dex-unlocked">🎴 Dex capture unlocked</span>
+                      : `Bet $${Math.max(5, Math.ceil(chips * 0.1))}+ to unlock Dex capture`}
+                  </p>
+                  <button className="btn-primary btn-deal" onClick={startGame} disabled={bet === 0}>
+                    Deal
+                  </button>
+                </>
+              )
             )}
 
             {gameState === 'playing' && (
@@ -1189,7 +1459,7 @@ function App() {
             )}
 
             {gameState === 'dealer-turn' && (
-              <p className="bet-display">Gym Leader draws…</p>
+              <p className="bet-display">{bossActive ? 'Boss responds…' : 'Gym Leader draws…'}</p>
             )}
 
             {gameState === 'dex-select' && (
@@ -1207,7 +1477,60 @@ function App() {
               </>
             )}
 
-            {gameState === 'game-over' && (() => {
+            {gameState === 'game-over' && !bossChallenging && (() => {
+              // Boss victory screen
+              if (bossActive && bossResult === 'victory') {
+                return (
+                  <div className="boss-result-screen boss-victory">
+                    <div className="boss-result-title">🏆 BOSS DEFEATED!</div>
+                    <p className="boss-result-sub">
+                      {bossCard?.name} has been captured and added to your Pokédex!
+                    </p>
+                    {!bossVictoryPicked ? (
+                      <>
+                        <p className="boss-pick-prompt">Pick 1 card from your hand for your Pokédex:</p>
+                        <div className="boss-victory-hand">
+                          {bossVictoryHand.map((card, idx) => (
+                            <div
+                              key={card.id + idx}
+                              className={`card boss-pick-card${getHoloEffect(card.rarity) ? ' holo-' + getHoloEffect(card.rarity) : ''}`}
+                              onClick={() => { addToBossVictoryDex(card); setBossVictoryPicked(true); }}
+                            >
+                              <img src={card.images.small} alt={card.name} className="card-image" />
+                              <span className="dex-capture-badge">+ DEX</span>
+                            </div>
+                          ))}
+                        </div>
+                        <button className="btn-secondary" onClick={() => setBossVictoryPicked(true)}>Skip</button>
+                      </>
+                    ) : (
+                      <button className="btn-primary btn-boss-continue" onClick={endBossFight}>🎉 Continue!</button>
+                    )}
+                  </div>
+                );
+              }
+
+              // Boss defeat screen
+              if (bossActive && bossResult === 'defeat') {
+                return (
+                  <div className="boss-result-screen boss-defeat">
+                    <div className="boss-result-title">💀 Knocked Out!</div>
+                    <p className="boss-result-sub">{fighterName} couldn't hold on… the boss was too powerful!</p>
+                    <button className="btn-primary" onClick={endBossFight}>Try Again Later</button>
+                  </div>
+                );
+              }
+
+              // Boss fight — hand resolved, not yet over
+              if (bossActive && bossResult === null) {
+                return (
+                  <button className="btn-primary btn-boss-next" onClick={bossNextHand}>
+                    Next Hand ⚔️
+                  </button>
+                );
+              }
+
+              // Normal game-over
               if (chips < 5) {
                 return (
                   <div className="broke-screen">
