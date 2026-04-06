@@ -144,7 +144,7 @@ function getRarityClass(rarity: string): string {
 function getHoloEffect(rarity: string): string {
   const r = rarity.toLowerCase();
   // Illustration Rares (SV era) — most premium effect
-  if (r.includes('illustration rare') || r.includes('special illustration')) {
+  if (r.includes('illustration rare') || r.includes('special illustration') || r.includes('trainer gallery')) {
     return 'illustration';
   }
   // Special/exalted holos: GX, V, VMAX, VSTAR, Full Art, Secret, Radiant, Ultra Rare
